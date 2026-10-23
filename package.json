@@ -3,14 +3,15 @@
   "version": "0.3.0",
   "description": "website to showcase some of the skills I am learning over the next few months",
   "engines": {
-    "node": "18.x"
+    "node": "22.x"
   },
   "main": "index.js",
   "scripts": {
     "heroku-prebuild": "echo This runs before Heroku installs your dependencies.",
     "heroku-postbuild": "echo This runs afterwards.",
     "start": "node index.js",
-    "test": "node test.js"
+    "test": "node --test tests/*.test.js",
+    "preview": "ENABLE_LEGACY_PHONE_VERIFICATION=false node index.js"
   },
   "dependencies": {
     "@vonage/server-sdk": "^2.11.2",
@@ -25,6 +26,7 @@
     "ejs": "^2.5.6",
     "express": "^4.16.3",
     "jsx": "^0.9.89",
+    "mongoose": "^9.11.3",
     "nodemailer": "^6.7.0",
     "npm": "^6.1.0",
     "pg": "^7.4.3",

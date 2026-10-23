@@ -1,0 +1,1183 @@
+{
+  "info": {
+    "name": "Soft Web Services — Service Intake",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "# Service inquiry API — first increment\n\nSame-origin JSON API. This is a public intake, with no account or client-project access. Staff authorization and durable inquiry records are future work.\n\n## GET /api/services\n\nReturns `categories`, `services`, and `generalService`. Each service includes its ID, description and question definitions. `lib/services.js` is the authoritative service schema; do not duplicate question options in clients. No prices are published.\n\n## POST /api/inquiries\n\nHeaders: `Content-Type: application/json`, `Idempotency-Key: <UUID v4>`. Browsers must use the configured public origin. Generate one key per payload and reuse it for retries of that payload.\n\nExample (replace the request key with a fresh UUID):\n\n```json\n{\n  \"serviceId\": \"not-sure\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I want to discuss a website for my business.\",\n  \"availableDays\": [\"Monday\", \"Wednesday\"],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {},\n  \"faxNumber\": \"\"\n}\n```\n\n| Field | Rules |\n|---|---|\n| serviceId | One catalog ID, or `not-sure` |\n| fullName | Required text, maximum 120 characters |\n| businessName | Optional text, maximum 160 |\n| email | Required email address, maximum 254 |\n| phone | Optional for email contact; required for phone/either; maximum 40 |\n| contactPreference | `email`, `phone`, or `either` |\n| goal | Required text, maximum 3,000; do not include sensitive data |\n| availableDays | Array of unique full English weekday names; may be empty |\n| availableTimes | Optional preference text, maximum 300 |\n| timezone | Required recognized timezone, maximum 80 |\n| answers | Object containing only the selected service's question IDs; values are strings, maximum 500 each; required/options/URL/date rules come from the catalog |\n| faxNumber | Honeypot: leave empty |\n\nUnknown top-level fields are rejected. Body limit is 20 KB. Recipient, subject and email content fields are never accepted from clients.\n\n201 returns `{reference, saved: true, notificationStatus, acknowledgmentSent, message}` after the database has accepted the inquiry. Email is attempted afterward. `notificationStatus` is `pending`, `processing`, `sent`, or `failed`. A saved inquiry remains successful even if SMTP is missing or fails. `acknowledgmentSent: false` means the requester email is unconfirmed; it does not indicate that the database save failed. Do not resubmit a saved inquiry just to trigger email.\n\nRepeating the same key and normalized payload returns the same reference across instances/restarts. Notification fields may reflect a newer delivery state; no second email attempt is started. Availability does not reserve a time. See `mongodb-setup.md` for stored fields and recovery limitations.\n\n| Status | Meaning/action |\n|---|---|\n| 400 | Invalid fields/JSON/key; correct errors (`errors` may identify fields) |\n| 403 | Browser origin rejected |\n| 409 | Key reused with changed payload; generate a new key |\n| 413 / 415 | Body too large / unsupported content type |\n| 429 | Rate limited; honor `Retry-After` |\n| 503 | Database/configuration failure before acceptance; preserve entries and retry with the same key |\n\nPOST `/api/nodeEmails` returns 410. No caller-controlled email relay remains.\n\n## API tools\n\nPostman and Thunder Client can call these endpoints using the same JSON and headers. Start with the isolated automated tests using simulated storage and delivery; do not run delivery tests against production without owner approval. Keep environment secrets out of exported collections. The automated Node tests provide executable request/response examples without sending mail or connecting to Atlas.\n\nThis increment supplies this reference and executable tests, not a generated Swagger interface. A later OpenAPI document can drive Swagger UI and Postman imports once the API expands; maintain one contract rather than independently edited copies. Codex can assist with implementation and contract checks, but is not an API runtime, authorization layer or source of truth.\n\n## Importable Postman collection\n\nImport `docs/Soft-Web-Services.postman_collection.json` in Postman. It includes the catalog request, six inquiry examples (each service plus help choosing), and saved sample responses. Saved responses are illustrative; they do not indicate that an inquiry was sent.\n\n1. Import the JSON file and open the collection documentation or a request's saved examples.\n2. To execute requests locally, run `npm ci` then `npm run preview` from the repository. The collection defaults to `http://localhost:5000`; this server is on the machine running the application, not an already deployed website.\n3. Send the catalog GET request first. Inquiry POST requests can send actual emails when SMTP is configured. Without MongoDB they return 503. With MongoDB but no SMTP they save the inquiry and return 201 with notificationStatus failed. Existing automated tests use mocked delivery; the normal preview server does not fake success.\n4. Inquiry requests generate a UUID and reuse it for unchanged payload retries. A changed payload generates a new UUID. Clear the collection variable `inquiryKey` to intentionally submit another identical inquiry.\n5. Do not store SMTP credentials or real customer data in shared collection exports. `baseUrl` can later point to a verified staging deployment.\n\nThe collection is a checked-in developer artifact, not a published Postman workspace. Update its examples whenever the API or catalog changes. A shared OpenAPI contract and Swagger viewer remain a later documentation increment.\n\n\nSaved examples are illustrative. Local baseUrl is http://localhost:5000. MongoDB is required for submission; SMTP is optional for acceptance. Request scripts reuse keys for unchanged payload retries. No SMTP secrets belong in this collection."
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:5000",
+      "type": "string"
+    },
+    {
+      "key": "inquiryKey",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "lastInquiryPayload",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "List services and question schemas",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": "{{baseUrl}}/api/services",
+        "description": "Read the available categories, services, and service-specific question definitions. No authentication required."
+      },
+      "response": [
+        {
+          "name": "Catalog (current definitions)",
+          "originalRequest": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/services",
+            "description": "Read the available categories, services, and service-specific question definitions. No authentication required."
+          },
+          "status": "OK",
+          "code": 200,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"categories\": [\n    {\n      \"id\": \"web\",\n      \"name\": \"Web services\"\n    },\n    {\n      \"id\": \"marketing\",\n      \"name\": \"Digital marketing\"\n    },\n    {\n      \"id\": \"education\",\n      \"name\": \"Tutoring and exam preparation\"\n    },\n    {\n      \"id\": \"career\",\n      \"name\": \"Interview preparation and bootcamps\"\n    }\n  ],\n  \"services\": [\n    {\n      \"id\": \"website-management\",\n      \"category\": \"web\",\n      \"name\": \"Website management\",\n      \"summary\": \"Keep your existing website useful, current, and working for your business.\",\n      \"includes\": [\n        \"Website updates and maintenance\",\n        \"Content and functionality changes\",\n        \"Website refreshes and larger improvements\"\n      ],\n      \"questions\": [\n        {\n          \"id\": \"websiteUrl\",\n          \"label\": \"Existing website URL (if you have one)\",\n          \"type\": \"url\",\n          \"options\": [],\n          \"required\": false\n        },\n        {\n          \"id\": \"supportType\",\n          \"label\": \"What kind of help do you need?\",\n          \"type\": \"select\",\n          \"options\": [\n            \"Updates or fixes\",\n            \"Ongoing maintenance\",\n            \"A website refresh\",\n            \"Not sure yet\"\n          ],\n          \"required\": true\n        }\n      ]\n    },\n    {\n      \"id\": \"web-development\",\n      \"category\": \"web\",\n      \"name\": \"Web development\",\n      \"summary\": \"Discuss a new website or web application built around your business needs.\",\n      \"includes\": [\n        \"Business websites\",\n        \"Web applications and integrations\",\n        \"Requirements and scope discussion\"\n      ],\n      \"questions\": [\n        {\n          \"id\": \"websiteType\",\n          \"label\": \"What would you like to build?\",\n          \"type\": \"select\",\n          \"options\": [\n            \"Business website\",\n            \"Online store\",\n            \"Web application\",\n            \"Not sure yet\"\n          ],\n          \"required\": true\n        },\n        {\n          \"id\": \"websiteUrl\",\n          \"label\": \"Existing website or reference URL (optional)\",\n          \"type\": \"url\",\n          \"options\": [],\n          \"required\": false\n        }\n      ]\n    },\n    {\n      \"id\": \"digital-marketing\",\n      \"category\": \"marketing\",\n      \"name\": \"Digital marketing\",\n      \"summary\": \"Improve how people discover and engage with your business online.\",\n      \"includes\": [\n        \"Online branding\",\n        \"Facebook and Google advertising campaigns\",\n        \"Search engine optimization\"\n      ],\n      \"questions\": [\n        {\n          \"id\": \"marketingGoal\",\n          \"label\": \"What is your main marketing goal?\",\n          \"type\": \"select\",\n          \"options\": [\n            \"Build awareness\",\n            \"Generate inquiries\",\n            \"Increase sales\",\n            \"Not sure yet\"\n          ],\n          \"required\": true\n        },\n        {\n          \"id\": \"websiteUrl\",\n          \"label\": \"Business website URL (optional)\",\n          \"type\": \"url\",\n          \"options\": [],\n          \"required\": false\n        },\n        {\n          \"id\": \"channels\",\n          \"label\": \"Existing social channels or campaigns (optional)\",\n          \"type\": \"text\",\n          \"options\": [],\n          \"required\": false\n        }\n      ]\n    },\n    {\n      \"id\": \"tutoring\",\n      \"category\": \"education\",\n      \"name\": \"Tutoring and exam preparation\",\n      \"summary\": \"Get help with a subject, course, or upcoming exam through Soft Web Services.\",\n      \"includes\": [\n        \"High-school and college tutoring\",\n        \"Algebra, precalculus, calculus, and other subjects\",\n        \"Course and exam preparation support\"\n      ],\n      \"questions\": [\n        {\n          \"id\": \"subject\",\n          \"label\": \"Which subject, course, or exam do you need help with?\",\n          \"type\": \"text\",\n          \"options\": [],\n          \"required\": true\n        },\n        {\n          \"id\": \"level\",\n          \"label\": \"What level are you studying?\",\n          \"type\": \"select\",\n          \"options\": [\n            \"High school\",\n            \"College\",\n            \"Professional or other\"\n          ],\n          \"required\": true\n        },\n        {\n          \"id\": \"targetDate\",\n          \"label\": \"Exam or important course date (optional)\",\n          \"type\": \"date\",\n          \"options\": [],\n          \"required\": false\n        }\n      ]\n    },\n    {\n      \"id\": \"interview-preparation\",\n      \"category\": \"career\",\n      \"name\": \"Interview preparation and bootcamps\",\n      \"summary\": \"Prepare for software-engineering interviews with feedback, resources, and mentoring.\",\n      \"includes\": [\n        \"Mock interview sessions\",\n        \"Interview preparation resources\",\n        \"Consulting, feedback, and mentoring packages\"\n      ],\n      \"questions\": [\n        {\n          \"id\": \"targetRole\",\n          \"label\": \"What role or interview are you preparing for?\",\n          \"type\": \"text\",\n          \"options\": [],\n          \"required\": true\n        },\n        {\n          \"id\": \"supportType\",\n          \"label\": \"What support are you interested in?\",\n          \"type\": \"select\",\n          \"options\": [\n            \"Mock interviews and feedback\",\n            \"Preparation resources\",\n            \"Mentoring or a bootcamp\",\n            \"Not sure yet\"\n          ],\n          \"required\": true\n        },\n        {\n          \"id\": \"targetDate\",\n          \"label\": \"Interview date (optional)\",\n          \"type\": \"date\",\n          \"options\": [],\n          \"required\": false\n        }\n      ]\n    }\n  ],\n  \"generalService\": {\n    \"id\": \"not-sure\",\n    \"name\": \"Help choosing a service\",\n    \"summary\": \"Describe what you would like to achieve and we will help identify the right service.\",\n    \"questions\": []\n  }\n}"
+        }
+      ]
+    },
+    {
+      "name": "Inquire: Help choosing a service",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const payload = pm.variables.replaceIn(pm.request.body.raw);",
+              "if (pm.collectionVariables.get('lastInquiryPayload') !== payload || !pm.collectionVariables.get('inquiryKey')) {",
+              "  pm.collectionVariables.set('inquiryKey', pm.variables.replaceIn('{{$guid}}'));",
+              "  pm.collectionVariables.set('lastInquiryPayload', payload);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{inquiryKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/inquiries",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"serviceId\": \"not-sure\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {},\n  \"faxNumber\": \"\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+      },
+      "response": [
+        {
+          "name": "Saved inquiry (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"not-sure\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {},\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"sent\",\n  \"acknowledgmentSent\": true,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        },
+        {
+          "name": "Validation error (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"not-sure\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {},\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"message\": \"Check the highlighted fields.\",\n  \"errors\": {\n    \"email\": \"Enter a valid email address.\"\n  }\n}"
+        },
+        {
+          "name": "Database unavailable (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"not-sure\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {},\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Service Unavailable",
+          "code": 503,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"message\": \"We could not confirm that your inquiry was saved. Your entries are still here. Please retry using this page.\"\n}"
+        },
+        {
+          "name": "Saved despite email failure (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"not-sure\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {},\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"failed\",\n  \"acknowledgmentSent\": false,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Inquire: Website management",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const payload = pm.variables.replaceIn(pm.request.body.raw);",
+              "if (pm.collectionVariables.get('lastInquiryPayload') !== payload || !pm.collectionVariables.get('inquiryKey')) {",
+              "  pm.collectionVariables.set('inquiryKey', pm.variables.replaceIn('{{$guid}}'));",
+              "  pm.collectionVariables.set('lastInquiryPayload', payload);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{inquiryKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/inquiries",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"serviceId\": \"website-management\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"websiteUrl\": \"\",\n    \"supportType\": \"Updates or fixes\"\n  },\n  \"faxNumber\": \"\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+      },
+      "response": [
+        {
+          "name": "Saved inquiry (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"website-management\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"websiteUrl\": \"\",\n    \"supportType\": \"Updates or fixes\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"sent\",\n  \"acknowledgmentSent\": true,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        },
+        {
+          "name": "Validation error (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"website-management\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"websiteUrl\": \"\",\n    \"supportType\": \"Updates or fixes\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"message\": \"Check the highlighted fields.\",\n  \"errors\": {\n    \"email\": \"Enter a valid email address.\"\n  }\n}"
+        },
+        {
+          "name": "Database unavailable (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"website-management\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"websiteUrl\": \"\",\n    \"supportType\": \"Updates or fixes\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Service Unavailable",
+          "code": 503,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"message\": \"We could not confirm that your inquiry was saved. Your entries are still here. Please retry using this page.\"\n}"
+        },
+        {
+          "name": "Saved despite email failure (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"website-management\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"websiteUrl\": \"\",\n    \"supportType\": \"Updates or fixes\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"failed\",\n  \"acknowledgmentSent\": false,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Inquire: Web development",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const payload = pm.variables.replaceIn(pm.request.body.raw);",
+              "if (pm.collectionVariables.get('lastInquiryPayload') !== payload || !pm.collectionVariables.get('inquiryKey')) {",
+              "  pm.collectionVariables.set('inquiryKey', pm.variables.replaceIn('{{$guid}}'));",
+              "  pm.collectionVariables.set('lastInquiryPayload', payload);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{inquiryKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/inquiries",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"serviceId\": \"web-development\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"websiteType\": \"Business website\",\n    \"websiteUrl\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+      },
+      "response": [
+        {
+          "name": "Saved inquiry (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"web-development\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"websiteType\": \"Business website\",\n    \"websiteUrl\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"sent\",\n  \"acknowledgmentSent\": true,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        },
+        {
+          "name": "Validation error (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"web-development\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"websiteType\": \"Business website\",\n    \"websiteUrl\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"message\": \"Check the highlighted fields.\",\n  \"errors\": {\n    \"email\": \"Enter a valid email address.\"\n  }\n}"
+        },
+        {
+          "name": "Database unavailable (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"web-development\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"websiteType\": \"Business website\",\n    \"websiteUrl\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Service Unavailable",
+          "code": 503,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"message\": \"We could not confirm that your inquiry was saved. Your entries are still here. Please retry using this page.\"\n}"
+        },
+        {
+          "name": "Saved despite email failure (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"web-development\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"websiteType\": \"Business website\",\n    \"websiteUrl\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"failed\",\n  \"acknowledgmentSent\": false,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Inquire: Digital marketing",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const payload = pm.variables.replaceIn(pm.request.body.raw);",
+              "if (pm.collectionVariables.get('lastInquiryPayload') !== payload || !pm.collectionVariables.get('inquiryKey')) {",
+              "  pm.collectionVariables.set('inquiryKey', pm.variables.replaceIn('{{$guid}}'));",
+              "  pm.collectionVariables.set('lastInquiryPayload', payload);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{inquiryKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/inquiries",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"serviceId\": \"digital-marketing\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"marketingGoal\": \"Build awareness\",\n    \"websiteUrl\": \"\",\n    \"channels\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+      },
+      "response": [
+        {
+          "name": "Saved inquiry (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"digital-marketing\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"marketingGoal\": \"Build awareness\",\n    \"websiteUrl\": \"\",\n    \"channels\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"sent\",\n  \"acknowledgmentSent\": true,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        },
+        {
+          "name": "Validation error (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"digital-marketing\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"marketingGoal\": \"Build awareness\",\n    \"websiteUrl\": \"\",\n    \"channels\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"message\": \"Check the highlighted fields.\",\n  \"errors\": {\n    \"email\": \"Enter a valid email address.\"\n  }\n}"
+        },
+        {
+          "name": "Database unavailable (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"digital-marketing\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"marketingGoal\": \"Build awareness\",\n    \"websiteUrl\": \"\",\n    \"channels\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Service Unavailable",
+          "code": 503,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"message\": \"We could not confirm that your inquiry was saved. Your entries are still here. Please retry using this page.\"\n}"
+        },
+        {
+          "name": "Saved despite email failure (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"digital-marketing\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"marketingGoal\": \"Build awareness\",\n    \"websiteUrl\": \"\",\n    \"channels\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"failed\",\n  \"acknowledgmentSent\": false,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Inquire: Tutoring and exam preparation",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const payload = pm.variables.replaceIn(pm.request.body.raw);",
+              "if (pm.collectionVariables.get('lastInquiryPayload') !== payload || !pm.collectionVariables.get('inquiryKey')) {",
+              "  pm.collectionVariables.set('inquiryKey', pm.variables.replaceIn('{{$guid}}'));",
+              "  pm.collectionVariables.set('lastInquiryPayload', payload);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{inquiryKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/inquiries",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"serviceId\": \"tutoring\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"subject\": \"Example subject or target role\",\n    \"level\": \"High school\",\n    \"targetDate\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+      },
+      "response": [
+        {
+          "name": "Saved inquiry (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"tutoring\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"subject\": \"Example subject or target role\",\n    \"level\": \"High school\",\n    \"targetDate\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"sent\",\n  \"acknowledgmentSent\": true,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        },
+        {
+          "name": "Validation error (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"tutoring\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"subject\": \"Example subject or target role\",\n    \"level\": \"High school\",\n    \"targetDate\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"message\": \"Check the highlighted fields.\",\n  \"errors\": {\n    \"email\": \"Enter a valid email address.\"\n  }\n}"
+        },
+        {
+          "name": "Database unavailable (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"tutoring\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"subject\": \"Example subject or target role\",\n    \"level\": \"High school\",\n    \"targetDate\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Service Unavailable",
+          "code": 503,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"message\": \"We could not confirm that your inquiry was saved. Your entries are still here. Please retry using this page.\"\n}"
+        },
+        {
+          "name": "Saved despite email failure (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"tutoring\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"subject\": \"Example subject or target role\",\n    \"level\": \"High school\",\n    \"targetDate\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"failed\",\n  \"acknowledgmentSent\": false,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Inquire: Interview preparation and bootcamps",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const payload = pm.variables.replaceIn(pm.request.body.raw);",
+              "if (pm.collectionVariables.get('lastInquiryPayload') !== payload || !pm.collectionVariables.get('inquiryKey')) {",
+              "  pm.collectionVariables.set('inquiryKey', pm.variables.replaceIn('{{$guid}}'));",
+              "  pm.collectionVariables.set('lastInquiryPayload', payload);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Idempotency-Key",
+            "value": "{{inquiryKey}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/inquiries",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"serviceId\": \"interview-preparation\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"targetRole\": \"Example subject or target role\",\n    \"supportType\": \"Mock interviews and feedback\",\n    \"targetDate\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+      },
+      "response": [
+        {
+          "name": "Saved inquiry (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"interview-preparation\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"targetRole\": \"Example subject or target role\",\n    \"supportType\": \"Mock interviews and feedback\",\n    \"targetDate\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"sent\",\n  \"acknowledgmentSent\": true,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        },
+        {
+          "name": "Validation error (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"interview-preparation\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"targetRole\": \"Example subject or target role\",\n    \"supportType\": \"Mock interviews and feedback\",\n    \"targetDate\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Bad Request",
+          "code": 400,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"message\": \"Check the highlighted fields.\",\n  \"errors\": {\n    \"email\": \"Enter a valid email address.\"\n  }\n}"
+        },
+        {
+          "name": "Database unavailable (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"interview-preparation\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"targetRole\": \"Example subject or target role\",\n    \"supportType\": \"Mock interviews and feedback\",\n    \"targetDate\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Service Unavailable",
+          "code": 503,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"message\": \"We could not confirm that your inquiry was saved. Your entries are still here. Please retry using this page.\"\n}"
+        },
+        {
+          "name": "Saved despite email failure (illustrative)",
+          "originalRequest": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{inquiryKey}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/inquiries",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"serviceId\": \"interview-preparation\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I would like to discuss my goals and next steps.\",\n  \"availableDays\": [\n    \"Monday\",\n    \"Wednesday\"\n  ],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {\n    \"targetRole\": \"Example subject or target role\",\n    \"supportType\": \"Mock interviews and feedback\",\n    \"targetDate\": \"\"\n  },\n  \"faxNumber\": \"\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Saves an inquiry to MongoDB, then attempts email. Can write real data and send real emails when configured. Use isolated local tests first. The pre-request script reuses a UUID for unchanged retries. Saved responses are illustrative, not actual delivery results."
+          },
+          "status": "Created",
+          "code": 201,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"failed\",\n  \"acknowledgmentSent\": false,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        }
+      ]
+    }
+  ]
+}
