@@ -1,0 +1,4 @@
+/* Scoped to the legacy homepage; matches the consultation form palette. */
+a.sws-consultation-cta{display:inline-flex;align-items:center;justify-content:center;min-height:48px;max-width:100%;padding:12px 24px;border:2px solid #238000;border-radius:12px;background:#238000;color:#fff;text-align:center;text-decoration:none;font-weight:700;line-height:1.4;box-sizing:border-box}
+a.sws-consultation-cta:hover{background:#1b6500;border-color:#1b6500;color:#fff}
+a.sws-consultation-cta:focus-visible{outline:3px solid #011828;outline-offset:4px}
