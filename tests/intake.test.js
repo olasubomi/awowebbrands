@@ -38,3 +38,11 @@ test('database diagnostics distinguish failures without leaking driver details',
   const store=memoryStore();store.save=async()=>{throw Object.assign(new Error('mongodb+srv://secret:password@example.invalid/private customer@example.com'),{code:18});};
   const s=await server(t,{store});const r=await s.post();assert.equal(r.status,503);const body=await r.text();assert.match(body,/SWS-AUTH/);assert.doesNotMatch(body,/password|mongodb\+srv|customer@example/);
 });
+
+test('Atlas code 8000 distinguishes restricted database users and invalid credentials',()=>{
+  const {inquiryFailureCode}=require('../lib/inquiry-errors');
+  assert.equal(inquiryFailureCode(new Error('DATABASE_UNAVAILABLE',{cause:{code:8000,message:'user is not allowed to do action [createIndex] on private database'}})),'SWS-ACCESS');
+  assert.equal(inquiryFailureCode({code:8000,message:'bad auth : authentication failed secret-password'}),'SWS-AUTH');
+  assert.equal(inquiryFailureCode({code:8000,message:'unknown private details'}),'SWS-SAVE-8000');
+  assert.equal(inquiryFailureCode({code:121,message:'private customer data'}),'SWS-SAVE-121');
+});

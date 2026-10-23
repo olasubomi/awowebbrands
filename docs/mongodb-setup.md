@@ -69,3 +69,5 @@ A 503 response includes a fixed `supportCode` and random `incident` reference; t
 | SWS-SAVE | Unclassified persistence failure; investigate the incident without exposing raw driver errors |
 
 These codes narrow the investigation; they do not by themselves prove a particular Atlas setting is wrong. No network allowlist or database privilege is automatically broadened.
+
+Atlas can report database authentication/authorization failures with code 8000; the application maps known fixed phrases to SWS-AUTH or SWS-ACCESS. Unrecognized numeric server errors return SWS-SAVE followed by the numeric code, without the original message. The isolated MongoDB integration attempt in the workspace was blocked by the runtime (mongod could not start: open operation not permitted); it did not verify or modify Atlas.

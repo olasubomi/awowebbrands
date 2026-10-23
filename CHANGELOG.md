@@ -32,3 +32,5 @@ Validation: 15 tests pass on Node 22 and Node 24 using simulated storage/deliver
 ## Unreleased — inquiry failure diagnostics
 
 Added sanitized failure categories and incident references to failed inquiry responses and runtime logs. Preserved nested connection errors for classification without logging their original messages. The form displays a support reference so protected-log access is not required to identify the broad failure category. Root cause of the reported Preview failure remains unverified until the diagnostic build is tested.
+
+Diagnostic follow-up: classify Atlas code 8000 authentication and permission errors, and retain safe numeric server error codes for unclassified failures. No Atlas roles or network settings were changed by the code.
