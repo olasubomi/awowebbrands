@@ -54,3 +54,18 @@ Collection `intake_rate_buckets` stores hashed IP/hour identifiers, counters and
 - Save succeeds but claim/status update fails: return saved receipt; notification may remain pending/processing for review.
 
 No public read/update endpoint is provided for submitted inquiries. Add authenticated staff APIs and roles before exposing those records.
+
+## Diagnosing a failed save
+
+A 503 response includes a fixed `supportCode` and random `incident` reference; the form displays them for support. Runtime logs contain only these references and the operation stage. Driver messages, URIs, credentials and customer fields are never logged or returned.
+
+| Support code | Check |
+|---|---|
+| SWS-CONFIG | Deployment has MONGODB_URI; connection string is valid and all placeholders are replaced |
+| SWS-AUTH | Atlas database username/password, URL-encoded password characters, and authentication settings |
+| SWS-ACCESS | Database user has readWrite on softwebservices_dev, including rate-bucket index creation |
+| SWS-CONNECTION | Cluster availability, DNS, TLS, and Atlas network access for Vercel egress |
+| SWS-SCHEMA | Application record validation; report the incident for a code fix |
+| SWS-SAVE | Unclassified persistence failure; investigate the incident without exposing raw driver errors |
+
+These codes narrow the investigation; they do not by themselves prove a particular Atlas setting is wrong. No network allowlist or database privilege is automatically broadened.

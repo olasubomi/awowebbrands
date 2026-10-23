@@ -102,7 +102,7 @@
     try {
       const response = await fetch('/api/inquiries', { method: 'POST', headers: { 'Content-Type': 'application/json', 'Idempotency-Key': key }, body: serialized });
       const result = await response.json();
-      if (!response.ok) { if (response.status === 409) key = null; showErrors(result.message || 'We could not send your request.', result.errors); return; }
+      if (!response.ok) { if (response.status === 409) key = null; const detail = result.supportCode && result.incident ? ` Support reference: ${result.supportCode} / ${result.incident}.` : ''; showErrors((result.message || 'We could not send your request.') + detail, result.errors); return; }
       form.hidden = true; id('receipt').hidden = false;
       id('receipt-message').textContent = result.message;
       id('receipt-reference').textContent = `Your reference: ${result.reference}`;

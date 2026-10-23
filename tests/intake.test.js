@@ -26,3 +26,15 @@ test('mailer owns destinations and tolerates acknowledgment failure',async()=>{c
 test('missing mail configuration fails closed',async()=>{await assert.rejects(createInquiryMailer({})(payload(),generalService,'SWS-TEST'),/MAIL_NOT_CONFIGURED/);});
 test('saved inquiry remains successful when notification claim cannot be recorded',async t=>{let calls=0;const store=memoryStore();store.claimNotification=async()=>{throw Error('db');};const s=await server(t,{store,sendInquiry:async()=>{calls++;return {};}});const r=await s.post();assert.equal(r.status,201);assert.equal((await r.json()).notificationStatus,'pending');assert.equal(store.documents.size,1);assert.equal(calls,0);});
 test('production storage never falls back to email-only when URI is absent',async t=>{let calls=0;const s=await server(t,{store:undefined,sendInquiry:async()=>{calls++;return {};}});assert.equal((await s.post()).status,503);assert.equal(calls,0);});
+test('database diagnostics distinguish failures without leaking driver details',async t=>{
+  const {inquiryFailureCode}=require('../lib/inquiry-errors');
+  assert.equal(inquiryFailureCode(new Error('DATABASE_NOT_CONFIGURED')),'SWS-CONFIG');
+  assert.equal(inquiryFailureCode({name:'MongoParseError'}),'SWS-CONFIG');
+  assert.equal(inquiryFailureCode({cause:{code:18}}),'SWS-AUTH');
+  assert.equal(inquiryFailureCode({cause:{code:13}}),'SWS-ACCESS');
+  assert.equal(inquiryFailureCode({name:'MongooseServerSelectionError',reason:{servers:new Map([['host',{error:{code:18}}]])}}),'SWS-AUTH');
+  assert.equal(inquiryFailureCode({name:'MongooseServerSelectionError'}),'SWS-CONNECTION');
+  assert.equal(inquiryFailureCode({name:'ValidationError'}),'SWS-SCHEMA');
+  const store=memoryStore();store.save=async()=>{throw Object.assign(new Error('mongodb+srv://secret:password@example.invalid/private customer@example.com'),{code:18});};
+  const s=await server(t,{store});const r=await s.post();assert.equal(r.status,503);const body=await r.text();assert.match(body,/SWS-AUTH/);assert.doesNotMatch(body,/password|mongodb\+srv|customer@example/);
+});

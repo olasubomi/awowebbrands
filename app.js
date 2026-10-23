@@ -8,6 +8,7 @@ const { validateInquiry } = require('./lib/inquiry-validation');
 const { createInquiryMailer } = require('./lib/inquiry-mailer');
 const { createMongoStore } = require('./lib/inquiry-store');
 const { createSubmitInquiry } = require('./lib/submit-inquiry');
+const { inquiryFailureCode } = require('./lib/inquiry-errors');
 
 function createApp(options = {}) {
   const env = options.env || process.env;
@@ -40,16 +41,21 @@ function createApp(options = {}) {
     const checked = validateInquiry(req.body);
     if (checked.errors) return res.status(400).json({ message: 'Check the highlighted fields.', errors: checked.errors });
     const digest = crypto.createHash('sha256').update(JSON.stringify(checked.value)).digest('hex');
+    let stage = 'rate_limit';
     try {
       const rate = await store.allowRequest(req.ip, maxAttempts, time);
       if (!rate.allowed) {
         res.set('Retry-After', String(rate.retryAfter));
         return res.status(429).json({ message: 'Too many requests. Please try again later.' });
       }
+      stage = 'save';
       const result = await submitInquiry(key, digest, checked.value, checked.service);
       return res.status(result.status).json(result.body);
-    } catch (_) {
-      return res.status(503).json({ message: 'We could not confirm that your inquiry was saved. Your entries are still here. Please retry using this page.' });
+    } catch (error) {
+      const supportCode = inquiryFailureCode(error);
+      const incident = crypto.randomBytes(6).toString('hex');
+      console.error(JSON.stringify({ event: 'inquiry_save_failed', stage, supportCode, incident }));
+      return res.status(503).json({ message: 'We could not confirm that your inquiry was saved. Your entries are still here. Please retry using this page.', supportCode, incident });
     }
   });
 

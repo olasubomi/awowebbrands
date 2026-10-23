@@ -28,3 +28,7 @@ Added an importable Postman collection with the catalog, six service inquiry req
 - Atlas live verification and a Vercel Preview are pending Preview-scoped MONGODB_URI; the variable was observed only in Production. No domain changes or live emails were made.
 
 Validation: 15 tests pass on Node 22 and Node 24 using simulated storage/delivery plus offline Mongoose schema validation. Live Atlas and browser verification remain pending.
+
+## Unreleased — inquiry failure diagnostics
+
+Added sanitized failure categories and incident references to failed inquiry responses and runtime logs. Preserved nested connection errors for classification without logging their original messages. The form displays a support reference so protected-log access is not required to identify the broad failure category. Root cause of the reported Preview failure remains unverified until the diagnostic build is tested.
