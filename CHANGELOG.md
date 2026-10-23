@@ -34,3 +34,5 @@ Validation: 15 tests pass on Node 22 and Node 24 using simulated storage/deliver
 Added sanitized failure categories and incident references to failed inquiry responses and runtime logs. Preserved nested connection errors for classification without logging their original messages. The form displays a support reference so protected-log access is not required to identify the broad failure category. Root cause of the reported Preview failure remains unverified until the diagnostic build is tested.
 
 Diagnostic follow-up: classify Atlas code 8000 authentication and permission errors, and retain safe numeric server error codes for unclassified failures. No Atlas roles or network settings were changed by the code.
+
+Configuration correction: owner confirmed a separate Soft Web Services Atlas project, Cluster0, separate database user and database SWS-DB. Set Vercel Preview MONGODB_DB=SWS-DB to override the previous softwebservices_dev fallback. Production configuration/domain routing remain unchanged. Successful live submission remains to be verified.

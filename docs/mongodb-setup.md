@@ -2,23 +2,23 @@
 
 ## Target
 
-Vercel project: `soft-web-services` (`prj_5ItGCPrZPG9VcOf7schdyNCPp2Gg`). Soft Web Services uses its own database and database credentials. Reusing an Atlas cluster does not share application users, sessions, or role grants with ChopChow.
+Vercel project: `soft-web-services` (`prj_5ItGCPrZPG9VcOf7schdyNCPp2Gg`). Soft Web Services uses its own database and database credentials. The owner confirmed Soft Web Services has a separate Atlas project, a separate cluster named Cluster0, and a separate database user from ChopChow. Its database is SWS-DB. No ChopChow connection or credentials are reused.
 
 | Environment | Database | Secret |
 |---|---|---|
-| Local / Preview | `softwebservices_dev` | Dedicated development database user |
+| Current Preview | `SWS-DB` | Owner-created Soft Web Services database user |
 | Production | `softwebservices` | Separate production database user |
 
 ## Atlas and Vercel
 
 1. Restrict the database user to read/write access on the intended database. An Atlas account login is distinct from this application database user.
 2. Allow the application's outbound network connection in Atlas. Confirm Vercel egress/network options before selecting an allowlist strategy; do not assume your laptop's IP authorizes Vercel. Do not broaden network access without reviewing the choice.
-3. Set `MONGODB_URI` as a Secret/Sensitive variable for Preview in Vercel. Do not expose it in browser-prefixed variables. Set `MONGODB_DB=softwebservices_dev` as Preview configuration if explicitly selecting the database; this is also the non-production default.
+3. Set `MONGODB_URI` as a Secret/Sensitive variable for Preview in Vercel. Do not expose it in browser-prefixed variables. Set `MONGODB_DB=SWS-DB` for Preview. This explicit value overrides the code fallback softwebservices_dev and any database path in the URI. The owner confirmed SWS-DB as the actual database name.
 4. Verify database connectivity in a new Preview deployment, then submit a synthetic inquiry. Check that one document exists, with no duplicate on a same-key retry. No real customer data is required.
 5. Configure SMTP and run a separately approved delivery check. Inquiries save even without SMTP.
 6. Add separate Production credentials when ready. Changing an environment variable requires a new deployment before runtime receives it.
 
-Current connection verification: the Vercel metadata check found `MONGODB_URI` as sensitive but scoped only to Production. Its value was not retrieved. Live Atlas authentication, permissions and network connectivity remain unverified.
+Current configuration: MONGODB_URI is sensitive and available to Production and Preview. MONGODB_DB=SWS-DB was added for Preview after the owner confirmed the actual database name and separate Atlas project/cluster/user. The previous Preview selected the fallback softwebservices_dev. No URI secret value was retrieved. The database-name mismatch is corrected in configuration; successful saving still requires live verification.
 
 ## Stored documents
 
@@ -63,7 +63,7 @@ A 503 response includes a fixed `supportCode` and random `incident` reference; t
 |---|---|
 | SWS-CONFIG | Deployment has MONGODB_URI; connection string is valid and all placeholders are replaced |
 | SWS-AUTH | Atlas database username/password, URL-encoded password characters, and authentication settings |
-| SWS-ACCESS | Database user has readWrite on softwebservices_dev, including rate-bucket index creation |
+| SWS-ACCESS | Database user has readWrite on SWS-DB, including rate-bucket index creation |
 | SWS-CONNECTION | Cluster availability, DNS, TLS, and Atlas network access for Vercel egress |
 | SWS-SCHEMA | Application record validation; report the incident for a code fix |
 | SWS-SAVE | Unclassified persistence failure; investigate the incident without exposing raw driver errors |
