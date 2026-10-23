@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Request a consultation | Soft Web Services</title>
+  <meta name="description" content="Tell Soft Web Services what you need and how you would like to be contacted.">
+  <link rel="stylesheet" href="/intake-assets/intake.css"><script src="/intake-assets/consultation.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to consultation form</a>
+  <header class="site-header"><a class="brand" href="/" target="_top">Soft Web Services<span>Technology. Learning. Progress.</span></a><nav aria-label="Main navigation"><a href="/services" target="_top">Explore services</a><a href="/" target="_top">Home</a></nav></header>
+  <main id="main" class="page consultation-layout">
+    <section class="consultation-intro"><p class="eyebrow">Start a conversation</p><h1>Let’s understand<br>what you need.</h1><p class="lead">A few details will help us prepare for a useful conversation.</p><ol class="steps"><li>Choose the service you’re interested in.</li><li>Describe your goal and relevant details.</li><li>Tell us when and how to reach you.</li></ol><p class="note">Submitting this form requests a follow-up. It does not confirm an appointment, a price, or a delivery date.</p></section>
+    <section class="form-panel" aria-label="Consultation request">
+      <p id="form-loading" role="status">Loading the request form…</p>
+      <div id="error-summary" class="error-summary" role="alert" tabindex="-1" hidden></div>
+      <form id="inquiry-form" hidden>
+        <div class="field"><label for="serviceId">What are you interested in?</label><select id="serviceId" name="serviceId" required></select><p id="service-summary" class="hint"></p></div>
+        <fieldset id="service-details"><legend>A little more about your request</legend><div id="questions"></div></fieldset>
+        <div class="field"><label for="goal">What would you like help with?</label><textarea id="goal" name="goal" required maxlength="3000" rows="5" aria-describedby="goal-hint"></textarea><p id="goal-hint" class="hint">Describe the outcome, difficulty, or change you have in mind. Please don’t include passwords, payment details, or other sensitive information.</p></div>
+        <fieldset><legend>Your contact details</legend>
+          <div class="field"><label for="fullName">Full name</label><input id="fullName" name="fullName" autocomplete="name" maxlength="120" required></div>
+          <div class="field"><label for="businessName">Business or preferred name <span>(optional)</span></label><input id="businessName" name="businessName" autocomplete="organization" maxlength="160"></div>
+          <div class="field"><label for="email">Email address</label><input id="email" name="email" type="email" autocomplete="email" maxlength="254" required></div>
+          <div class="field"><label for="phone">Phone number <span id="phone-optional">(optional)</span></label><input id="phone" name="phone" type="tel" autocomplete="tel" maxlength="40"></div>
+          <div class="field"><label for="contactPreference">How would you like to be contacted?</label><select id="contactPreference" name="contactPreference" required><option value="email">Email / arrange an online meeting</option><option value="phone">Phone</option><option value="either">Phone or email</option></select></div>
+        </fieldset>
+        <fieldset><legend>Your availability <span>(optional)</span></legend><p class="hint">Select any suitable days and add times if you know them.</p><div class="days"><label><input type="checkbox" name="availableDays" value="Monday">Mon</label><label><input type="checkbox" name="availableDays" value="Tuesday">Tue</label><label><input type="checkbox" name="availableDays" value="Wednesday">Wed</label><label><input type="checkbox" name="availableDays" value="Thursday">Thu</label><label><input type="checkbox" name="availableDays" value="Friday">Fri</label><label><input type="checkbox" name="availableDays" value="Saturday">Sat</label><label><input type="checkbox" name="availableDays" value="Sunday">Sun</label></div>
+          <div class="field"><label for="availableTimes">Suitable times <span>(optional)</span></label><input id="availableTimes" name="availableTimes" maxlength="300" placeholder="For example, weekdays after 4 pm"></div>
+          <div class="field"><label for="timezone">Your timezone</label><input id="timezone" name="timezone" list="timezones" required maxlength="80" aria-describedby="timezone-hint"><datalist id="timezones"><option value="America/Los_Angeles"><option value="America/New_York"><option value="America/Chicago"><option value="Africa/Lagos"><option value="Europe/London"><option value="UTC"></datalist><p id="timezone-hint" class="hint">We’ll prefill your device timezone. Change it if needed.</p></div>
+        </fieldset>
+        <div class="bot-field" aria-hidden="true"><label for="faxNumber">Leave this field empty</label><input id="faxNumber" name="faxNumber" tabindex="-1" autocomplete="off"></div>
+        <p class="hint">We’ll use these details to respond to this inquiry. This does not subscribe you to marketing emails.</p>
+        <button class="button" id="submit-button" type="submit">Send consultation request</button><p id="submit-status" role="status" aria-live="polite"></p>
+      </form>
+      <section id="receipt" tabindex="-1" hidden><p class="eyebrow">Thank you</p><h2>Your inquiry has been saved.</h2><p id="receipt-message"></p><p class="reference" id="receipt-reference"></p><p id="receipt-email"></p><a href="/services" target="_top">Explore other services</a></section>
+      <noscript><p>JavaScript is needed to submit this form. Please use the contact details on our <a href="/" target="_top">home page</a>.</p></noscript>
+    </section>
+  </main>
+</body></html>
