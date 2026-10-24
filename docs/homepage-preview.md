@@ -2,7 +2,7 @@
 
 ## Scope
 
-Replaces the exported WordPress homepage with responsive HTML/CSS and a small progressively enhanced navigation script. No framework or dependency change. Existing `/services`, `/consultation`, inquiry API, MongoDB records, and transactional emails retain their existing behavior. No account, login, role assignment, or dashboard is introduced.
+Replaces the exported WordPress homepage with responsive HTML/CSS and a small progressively enhanced navigation script. No framework or dependency change. The service index is now server-rendered and links to five detail pages; an About page restores company photographs and history. See service-content-migration.md for source mapping and pricing review. The existing consultation form, inquiry API, MongoDB records, and transactional emails retain their behavior. No account, login, role assignment, or dashboard is introduced.
 
 ## Design and content
 

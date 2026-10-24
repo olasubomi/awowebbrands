@@ -9,6 +9,7 @@ const { createInquiryMailer } = require('./lib/inquiry-mailer');
 const { createMongoStore } = require('./lib/inquiry-store');
 const { createSubmitInquiry } = require('./lib/submit-inquiry');
 const { inquiryFailureCode } = require('./lib/inquiry-errors');
+const { catalogPage, servicePage, aboutPage, notFoundPage, sitemap } = require('./lib/site-pages');
 
 function createApp(options = {}) {
   const env = options.env || process.env;
@@ -25,6 +26,7 @@ function createApp(options = {}) {
   app.use((req, res, next) => {
     res.set('X-Content-Type-Options', 'nosniff');
     res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+    if (env.VERCEL_ENV === 'preview') res.set('X-Robots-Tag', 'noindex, nofollow');
     next();
   });
   app.get('/api/services', (req, res) => res.json({ categories, services, generalService }));
@@ -70,7 +72,21 @@ function createApp(options = {}) {
     next();
   };
   app.use('/intake-assets', express.static(path.join(web, 'assets'), { maxAge: 0 }));
-  app.get(['/services', '/services/'], pageHeaders, (req, res) => res.sendFile(path.join(web, 'services.html')));
+  app.get(['/services', '/services/'], pageHeaders, (req, res) => res.send(catalogPage()));
+  app.get('/services/:serviceId', pageHeaders, (req, res) => {
+    const html = servicePage(req.params.serviceId);
+    return html ? res.send(html) : res.status(404).send(notFoundPage());
+  });
+  app.get(['/about', '/about/'], pageHeaders, (req, res) => res.send(aboutPage()));
+  // Verified earlier About-page URL, preserving query parameters for old bookmarks.
+  app.get(['/about-us.html', '/about-us', '/about-us/'], (req, res) => {
+    const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+    res.redirect(308, `/about${query}`);
+  });
+  app.get('/sitemap.xml', (req, res) => res.type('application/xml').send(sitemap()));
+  app.get('/robots.txt', (req, res) => res.type('text/plain').send(env.VERCEL_ENV === 'preview'
+    ? 'User-agent: *\nDisallow: /\n'
+    : 'User-agent: *\nAllow: /\nSitemap: https://www.softwebs.io/sitemap.xml\n'));
   app.get(['/consultation', '/consultation/', '/awo_form', '/awo_form/'], pageHeaders, (req, res) => res.sendFile(path.join(web, 'consultation.html')));
 
   if (options.enablePhoneVerification !== false) {
