@@ -399,6 +399,16 @@ nav .button {
   height: 44px;
   object-fit: contain;
 }
+.web-service-icon {
+  position: relative;
+}
+.service-icon .management-icon {
+  position: absolute;
+  left: 29px;
+  top: 23px;
+  width: 18px;
+  height: 18px;
+}
 .service-card .eyebrow {
   color: var(--green);
 }

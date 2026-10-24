@@ -16,21 +16,21 @@ Replaces the exported WordPress homepage with responsive HTML/CSS and a small pr
 
 ## Uploaded artwork
 
-The owner supplied the five previously unavailable assets as PNG exports. Copies are stored locally in `public_html/assets/home/`; originals are unchanged. No temporary Figma URLs are used at runtime. Following owner review, the network image was removed from the homepage banner in favor of a plain black background; the source file is retained for possible future use.
+The owner supplied the five previously unavailable assets and the monitor management detail as PNG exports. Copies are stored locally in `public_html/assets/home/`; originals are unchanged. No temporary Figma URLs are used at runtime. Following owner review, the network image was removed from the homepage banner in favor of a plain black background; the source file is retained for possible future use.
 
 | Uploaded file                                              | Website file           | Dimensions | Placement                                                |
 | ---------------------------------------------------------- | ---------------------- | ---------- | -------------------------------------------------------- |
-| gradient-network-connection-background_23-2148870917 1.png | network-background.png | 1512 × 564 | Retained source; not displayed in the homepage banner |
+| gradient-network-connection-background_23-2148870917 1.png | network-background.png | 1512 × 564 | Retained source; not displayed in the homepage banner    |
 | Rectangle 88.png                                           | about-dashboard.png    | 346 × 302  | Beside the company introduction, preserving aspect ratio |
 | Background.png                                             | footer-background.png  | 1512 × 516 | Footer background with an additional dark overlay        |
 | Group.png                                                  | web-services.png       | 84 × 84    | Web services card, 44px display size                     |
 | system-uicons_book-text.png                                | education.png          | 87 × 87    | Learning and career support card, 44px display size      |
 
-Both icons include transparency. The dashboard export is capped at its native width to avoid enlargement. The company-history panel is retained below the introduction and artwork.
+All three icon exports include transparency. The dashboard export is capped at its native width to avoid enlargement. The company-history panel is retained below the introduction and artwork.
 
 ## Remaining visual differences
 
-The five main homepage artwork gaps are resolved. A small gear detail (`eos-icons:cluster-management-outlined`) inside the original Figma web-services monitor illustration is not included in the supplied Group.png; the preview uses the supplied monitor outline. A higher-resolution dashboard export would be useful if a larger display is wanted, but is not necessary at its current size. These are not blockers for reviewing this preview.
+The known homepage artwork gaps are resolved. The owner also supplied `eos-icons_cluster-management-outlined.png` (31 × 31, transparent), saved as `web-services-management.png` and displayed at 18px inside the monitor outline. A higher-resolution dashboard export would be useful if a larger display is wanted, but is not necessary at its current size. These are not blockers for reviewing this preview.
 
 This remains an adapted homepage, not a pixel-identical copy of every Figma layer: testimonial decorations, animated cursor effects and some utility icons are not reproduced. Unsupported sample client logos are deliberately excluded. Approved source logos and portfolio screenshots are included locally. The stacked logo is used on dark backgrounds; the horizontal source uses black lettering. No further uploads are required for the current preview.
 
