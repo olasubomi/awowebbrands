@@ -14,9 +14,25 @@ Replaces the exported WordPress homepage with responsive HTML/CSS and a small pr
 - Consolidated service links use the existing five service IDs and preselect the working consultation form. No historic prices or placeholder vacancies are published.
 - Contact panel explains the inquiry flow and links to the existing form, rather than creating a second submission implementation. Submitting does not confirm an appointment.
 
-## Known visual differences
+## Uploaded artwork
 
-Figma's temporary asset download endpoints returned an unavailable HTML page in the implementation environment. Decorative network/stock/background assets and service icons could not be imported. The preview uses a plain dark hero, a company-history panel in place of the stock image, text service marks, and a plain dark footer. These are reviewable adaptations, not a claim of pixel-identical implementation. Approved source logos and portfolio screenshots are included locally. Unsupported sample client logos are excluded. The stacked logo is used on dark backgrounds; the horizontal source uses black lettering.
+The owner supplied the five previously unavailable assets as PNG exports. Copies are stored locally in `public_html/assets/home/`; originals are unchanged. No temporary Figma URLs are used at runtime.
+
+| Uploaded file                                              | Website file           | Dimensions | Placement                                                |
+| ---------------------------------------------------------- | ---------------------- | ---------- | -------------------------------------------------------- |
+| gradient-network-connection-background_23-2148870917 1.png | network-background.png | 1512 × 564 | Hero background with a dark overlay for readable text    |
+| Rectangle 88.png                                           | about-dashboard.png    | 346 × 302  | Beside the company introduction, preserving aspect ratio |
+| Background.png                                             | footer-background.png  | 1512 × 516 | Footer background with an additional dark overlay        |
+| Group.png                                                  | web-services.png       | 84 × 84    | Web services card, 44px display size                     |
+| system-uicons_book-text.png                                | education.png          | 87 × 87    | Learning and career support card, 44px display size      |
+
+Both icons include transparency. The dashboard export is capped at its native width to avoid enlargement. The company-history panel is retained below the introduction and artwork.
+
+## Remaining visual differences
+
+The five main homepage artwork gaps are resolved. A small gear detail (`eos-icons:cluster-management-outlined`) inside the original Figma web-services monitor illustration is not included in the supplied Group.png; the preview uses the supplied monitor outline. A higher-resolution dashboard export would be useful if a larger display is wanted, but is not necessary at its current size. These are not blockers for reviewing this preview.
+
+This remains an adapted homepage, not a pixel-identical copy of every Figma layer: testimonial decorations, animated cursor effects and some utility icons are not reproduced. Unsupported sample client logos are deliberately excluded. Approved source logos and portfolio screenshots are included locally. The stacked logo is used on dark backgrounds; the horizontal source uses black lettering. No further uploads are required for the current preview.
 
 ## Review and release
 
@@ -29,3 +45,4 @@ Deploy only the feature branch to Vercel Preview for owner review. Keep producti
 - Mobile menu toggle and Escape-to-close passed. Website-development consultation preselection passed at each size without submitting an inquiry.
 - Desktop and mobile screenshots were inspected. Portfolio thumbnails preserve the original image content with `object-fit: contain`; full source screenshots open from their links. Logo proportions are preserved.
 - Styling uses the system font fallback when Inter is unavailable; no external font request is required.
+- After integrating the uploaded artwork, Chromium checks were repeated at all four widths. All five PNG routes returned image/png with HTTP 200; hero/footer background URLs, image decoding, mobile navigation, anchors, and consultation preselection passed. New desktop and mobile screenshots were inspected. No inquiry was submitted.
