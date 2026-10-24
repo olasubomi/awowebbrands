@@ -16,11 +16,11 @@ Replaces the exported WordPress homepage with responsive HTML/CSS and a small pr
 
 ## Uploaded artwork
 
-The owner supplied the five previously unavailable assets as PNG exports. Copies are stored locally in `public_html/assets/home/`; originals are unchanged. No temporary Figma URLs are used at runtime.
+The owner supplied the five previously unavailable assets as PNG exports. Copies are stored locally in `public_html/assets/home/`; originals are unchanged. No temporary Figma URLs are used at runtime. Following owner review, the network image was removed from the homepage banner in favor of a plain black background; the source file is retained for possible future use.
 
 | Uploaded file                                              | Website file           | Dimensions | Placement                                                |
 | ---------------------------------------------------------- | ---------------------- | ---------- | -------------------------------------------------------- |
-| gradient-network-connection-background_23-2148870917 1.png | network-background.png | 1512 × 564 | Hero background with a dark overlay for readable text    |
+| gradient-network-connection-background_23-2148870917 1.png | network-background.png | 1512 × 564 | Retained source; not displayed in the homepage banner |
 | Rectangle 88.png                                           | about-dashboard.png    | 346 × 302  | Beside the company introduction, preserving aspect ratio |
 | Background.png                                             | footer-background.png  | 1512 × 516 | Footer background with an additional dark overlay        |
 | Group.png                                                  | web-services.png       | 84 × 84    | Web services card, 44px display size                     |
