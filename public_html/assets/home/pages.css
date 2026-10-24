@@ -102,24 +102,24 @@
   gap: 60px;
   align-items: center;
 }
-.historical-price {
+.rate-card {
   min-width: 0;
   padding: 30px;
   background: #f4f7f1;
   border: 1px solid #cbd9c1;
   border-radius: 12px;
 }
-.historical-price h3 {
+.rate-card h3 {
   font-size: 19px;
   letter-spacing: 0;
 }
-.historic-amount {
+.rate-amount {
   font-size: clamp(26px, 3vw, 32px);
   overflow-wrap: anywhere;
   font-weight: 700;
   color: var(--ink);
 }
-.historical-price p:last-child {
+.rate-card p:last-child {
   font-size: 14px;
   margin: 0;
 }
@@ -203,6 +203,17 @@
   height: auto;
   border-radius: 12px;
 }
+.learning-gallery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px;
+  align-items: start;
+}
+.learning-gallery img {
+  width: 100%;
+  height: auto;
+  border-radius: 12px;
+}
 @media (max-width: 900px) {
   .pricing-grid,
   .preparation,
@@ -217,6 +228,9 @@
   }
 }
 @media (max-width: 760px) {
+  .learning-gallery {
+    grid-template-columns: 1fr;
+  }
   .detail-hero {
     padding: 42px 0 34px;
   }
@@ -236,7 +250,7 @@
     grid-template-columns: 1fr;
   }
   .option-card,
-  .historical-price,
+  .rate-card,
   .story-panel {
     padding: 25px;
   }

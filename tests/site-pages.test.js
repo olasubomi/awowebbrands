@@ -40,24 +40,27 @@ test("service discovery is rendered as HTML with crawlable detail links and cano
   }
 });
 
-test("historical rates are clearly labeled and unknown services produce real 404s", async (t) => {
+test("approved rates and campaign commission are shown without invented terms; unknown services return 404s", async (t) => {
   const get = await server(t);
   for (const [id, rate] of [
     ["website-management", "$50/hour"],
-    ["digital-marketing", "$500/campaign"],
+    ["digital-marketing", "$500 minimum plus commission"],
     ["interview-preparation", "$75/bundle"],
   ]) {
     const html = await (await get(`/services/${id}`)).text();
     assert.ok(html.includes(rate));
-    assert.match(html, /Historical reference only/);
-    assert.match(html, /not a current quote or confirmed offer/);
+    assert.match(html, /Service pricing/);
+    assert.doesNotMatch(html, /Historical reference only/);
   }
   for (const id of ["web-development", "tutoring"]) {
     assert.doesNotMatch(
       await (await get(`/services/${id}`)).text(),
-      /historic-amount/,
+      /rate-amount/,
     );
   }
+  const campaign = await (await get("/services/digital-marketing")).text();
+  assert.match(campaign, /commission rate, how commission is calculated/);
+  assert.doesNotMatch(campaign, /[0-9]+%/);
   const response = await get("/services/%3Cscript%3E");
   assert.equal(response.status, 404);
   assert.doesNotMatch(await response.text(), /<script>/);
