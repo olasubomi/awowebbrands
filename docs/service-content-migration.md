@@ -79,3 +79,32 @@ These are learning illustrations from the earlier site, not identified as curren
 Additional unused candidates found: classroom_tutor.jpeg, happy_student.jpeg, and career_services/online_tutor.png, plus original interview-review screenshots. These have not all been imported or represented as current customers. Figma's tutoring-frame inspection hit the connected plan's tool-call limit, so this audit is based on the repository assets and legacy HTML, not a claim that every Figma image has been enumerated.
 
 After the pricing confirmation and learning-image restoration, all 21 tests passed again. Chromium checks at 1440/834/375/320px passed for the site pages, image loading, overflow, navigation and service preselection, including the longer campaign price label. The catalog still works without JavaScript. No real inquiry or email was sent.
+
+## Approved asset placements — 26 October 2026
+
+The owner approved A005–A012, A019–A025 and A037–A042 from the central asset register, with duplicate images omitted and a restrained page layout. The Drive originals remain unchanged. The homepage remains unchanged in this increment.
+
+| Catalog ID | Placement / decision                                                                                              | Website derivative                |
+| ---------- | ----------------------------------------------------------------------------------------------------------------- | --------------------------------- |
+| A005       | Interview preparation: career-services archive photograph                                                         | `services/career-community.webp`  |
+| A006       | Interview preparation: Ibrahim Kallon review, transcribed verbatim with expandable screenshot                     | `services/ibrahim-review.webp`    |
+| A007–A009  | Same Ibrahim review; retain alternate versions in Drive                                                           | Not repeated                      |
+| A010       | Interview preparation: Khalil Adams review, transcribed verbatim with expandable screenshot                       | `services/khalil-review.webp`     |
+| A011       | Same Khalil review; retain alternate in Drive                                                                     | Not repeated                      |
+| A012       | Tutoring: expandable remote-learning gallery                                                                      | `services/remote-tutoring.webp`   |
+| A013       | Tutoring: one representative remote-lesson illustration                                                           | `services/remote-learning.webp`   |
+| A019       | Web development: contextual laptop photograph                                                                     | `services/website-work.webp`      |
+| A020       | Retain approved children photograph as a reserve, avoiding an additional tutoring image                           | Drive only                        |
+| A021       | Website management: contextual business-support photograph                                                        | `services/business-support.webp`  |
+| A022–A023  | Alternate crops of A005; retain originals                                                                         | Not repeated                      |
+| A024       | Retain code background as a reserve; small 360×225 source is unsuitable for a large banner                        | Drive only                        |
+| A025       | Digital marketing: campaign-planning illustration                                                                 | `services/campaign-planning.webp` |
+| A037       | Keep About community photograph                                                                                   | Existing path unchanged           |
+| A038–A040  | Keep homepage campaign results and ROG review; also link from marketing detail page with readable ROG review text | Existing paths unchanged          |
+| A041–A042  | Keep tutoring learning photographs                                                                                | Existing paths unchanged          |
+
+Derivative paths are relative to `public_html/assets/img/`. Photos are resized proportionally without cropping and encoded as WebP; review screenshots are lossless at their original dimensions. A012 is a proportionally reduced screenshot. HTML width/height reserve image space; new images are lazy-loaded. No external embeds, tracking, carousel library, schema change, database migration, or environment variable is introduced.
+
+`lib/service-media.js` holds the placements and reviews. The existing renderer escapes all content. Screenshots are behind native HTML disclosure controls, with full-size image links; testimonials have readable HTML text without requiring JavaScript. Stock photographs are labeled illustrative, and the A005 photograph is labeled as archive content without attributing it to a named testimonial or claiming an employment outcome.
+
+Validation for this increment: all 21 existing tests pass. Chromium checked seven pages at 1440, 834, 375 and 320px (28 page/viewport combinations), including all new image decoding, expanded galleries, horizontal overflow, and keyboard operation of review disclosures. Desktop tutoring and mobile interview-preparation screenshots were visually inspected. No real inquiry or email was sent.
