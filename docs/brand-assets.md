@@ -14,4 +14,10 @@ These assets are prepared for the redesigned homepage Preview. They have not yet
 
 ## Browser favicon
 
-The SWS Logo2 folder includes `32x32 favicon.png` (Drive file `1q0TUS1zQzJwRfC8ZwbcjpgPArY9EjpbS`), the blue globe with green swoosh. The website uses this original mark at `/assets/brand/sws-favicon-32.png`, a downsampled 16px PNG, and a multi-resolution `/favicon.ico` (16/32px). The homepage, shared service/About layout and consultation form include explicit icon links. The old root Awo Web Brands ICO is replaced, covering browser fallback requests. A version query on the ICO and new PNG filenames help avoid the previously cached icon. No third-party icon service or runtime dependency is required.
+The owner selected option 2 from the favicon comparison on 26 October 2026: bold white **SWS** initials on a near-black rounded square with a green underline. This replaces the detailed globe favicon that was difficult to read in a browser tab. The original globe asset remains in the SWS Logo2 folder; the website logo is unchanged.
+
+- `/assets/brand/sws-favicon.svg`: scalable monogram with lettering converted to vector outlines, so it has no external font dependency.
+- `/assets/brand/sws-favicon-32.png` and `sws-favicon-16.png`: raster fallbacks rendered from the same selected design.
+- `/favicon.ico`: 16/32/48px fallback for browser requests at the root.
+
+The homepage, shared service/About layout, and consultation form explicitly reference the new icons with the `sws-2` cache version. No external icon service, runtime dependency, database change, or environment variable is required. This change is deployed to Preview for review; production promotion remains separate.
