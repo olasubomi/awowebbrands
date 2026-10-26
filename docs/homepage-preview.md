@@ -46,3 +46,8 @@ Deploy only the feature branch to Vercel Preview for owner review. Keep producti
 - Desktop and mobile screenshots were inspected. Portfolio thumbnails preserve the original image content with `object-fit: contain`; full source screenshots open from their links. Logo proportions are preserved.
 - Styling uses the system font fallback when Inter is unavailable; no external font request is required.
 - After integrating the uploaded artwork, Chromium checks were repeated at all four widths. All five PNG routes returned image/png with HTTP 200; hero/footer background URLs, image decoding, mobile navigation, anchors, and consultation preselection passed. New desktop and mobile screenshots were inspected. No inquiry was submitted.
+
+
+## Simplified link presentation — 26 October 2026
+
+Removed decorative arrows from homepage links and buttons, the company-history panel, the shared service/About layout, and the service evidence links. Deleted the unused history-arrow CSS. Link destinations, text labels, native disclosure indicators, the mobile-menu toggle, and the selected SWS monogram favicon are preserved. Preview only; no production promotion.

@@ -316,14 +316,6 @@ nav .button {
 .history p {
   position: relative;
 }
-.history-mark {
-  position: absolute;
-  right: 22px;
-  top: 3px;
-  font-size: 120px;
-  line-height: 1;
-  color: #b9ec9e;
-}
 .history-note {
   font-size: 14px;
   padding-top: 18px;
