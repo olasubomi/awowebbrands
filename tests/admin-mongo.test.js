@@ -1,0 +1,41 @@
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const { randomUUID, randomBytes } = require('crypto');
+const { MongoClient } = require('mongodb');
+const { createMongoStore } = require('../lib/inquiry-store');
+
+test('MongoDB adapter signs in and atomically consumes codes; inquiry updates preserve legacy records', { skip: !process.env.SWS_TEST_MONGODB_URI }, async t => {
+  const uri = process.env.SWS_TEST_MONGODB_URI;
+  const database = 'sws_auth_test_' + randomBytes(6).toString('hex');
+  const client = await new MongoClient(uri).connect(), db = client.db(database);
+  t.after(async () => { await db.dropDatabase(); await client.close(); });
+  const { createRuntime } = await import('../lib/admin-auth.mjs');
+  const config = { origin: 'http://localhost:4000', secret: randomBytes(32).toString('hex'), emails: new Set(['admin@example.com']), prefix: 'test_auth_' };
+  const env = { MONGODB_URI: uri, MONGODB_DB: database };
+  const sent = [];
+  const runtime = await createRuntime(env, config, async (email, code) => sent.push({ email, code }));
+  t.after(() => runtime.close());
+  const req = { headers: { origin: config.origin, host: 'localhost:4000' } };
+  await runtime.requestCode('admin@example.com', req);
+  const response = await runtime.verifyCode('admin@example.com', sent[0].code, req);
+  assert.equal(response.status, 200);
+  const cookie = response.headers.getSetCookie().map(x => x.split(';')[0]).join('; ');
+  assert.equal((await runtime.session({ headers: { ...req.headers, cookie } })).user.emailVerified, true);
+  assert.equal((await runtime.verifyCode('admin@example.com', sent[0].code, req)).ok, false);
+  const id = randomUUID();
+  // Represents a pre-dashboard record: no managementVersion or statusHistory.
+  await db.collection('inquiries').insertOne({ _id: id, reference: 'SWS-TEST', fullName: 'Legacy inquiry', email: 'person@example.com', status: 'new', serviceId: 'not-sure', serviceName: 'Help choosing a service', digest: 'private', notificationStatus: 'sent', acknowledgmentSent: true, createdAt: new Date(), updatedAt: new Date() });
+  const store = createMongoStore(env);
+  const detail = await store.getInquiry(id); assert.equal(detail.version, 0); assert.equal(detail.digest, undefined);
+  const outcomes = await Promise.all([store.changeInquiryStatus(id, 'in-progress', 0, 'actor'), store.changeInquiryStatus(id, 'closed', 0, 'actor')]);
+  assert.equal(outcomes.filter(Boolean).length, 1);
+  const changed = await store.getInquiry(id); assert.equal(changed.version, 1); assert.equal(changed.statusHistory.length, 1); assert.equal(changed.statusHistory[0].changedBy, 'actor');
+  const raw = await db.collection('inquiries').findOne({ _id: id }); assert.equal(raw.digest, 'private'); assert.equal(raw.acknowledgmentSent, true);
+  const list = await store.listInquiries({ page: 1, status: '', serviceId: '' }); assert.equal(list.inquiries[0].id, id);
+  const other = createMongoStore(env);
+  t.after(async () => { await store.close(); await other.close(); });
+  const a = await store.adminLimit('same-address', 1, 600, Date.now());
+  const b = await other.adminLimit('same-address', 1, 600, Date.now());
+  assert.equal(a.allowed, true); assert.equal(b.allowed, false);
+});

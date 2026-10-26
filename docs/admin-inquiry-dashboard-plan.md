@@ -1,6 +1,6 @@
 # Admin login and inquiry dashboard — first increment
 
-Status: implementation plan, 26 October 2026. No authentication or dashboard code is included in this document change. Production remains unchanged.
+Status: backend implementation in progress, 26 October 2026. The isolated ESM authentication module and protected inquiry APIs are implemented; the interface is still a placeholder. Production remains unchanged.
 
 ## Goal and user stories
 
@@ -75,3 +75,14 @@ Official integration references reviewed:
 - https://better-auth.com/docs/integrations/express
 - https://better-auth.com/docs/plugins/email-otp
 - https://better-auth.com/docs/adapters/mongo
+
+
+## Backend compatibility checkpoint
+
+Pinned Better Auth and its Mongo adapter to 1.7.13, with the direct MongoDB driver pinned to 6.21.0. Removed the unused pg dependency: no repository code imports it, and its legacy v7 peer conflicts with the auth package. The application remains CommonJS JavaScript. Only lib/admin-auth.mjs is ESM, loaded through dynamic import.
+
+Node 22.23.4 passes the auth/session tests and existing intake tests. The deployment dependency trace includes the ESM entry, Better Auth minimal build and Mongo adapter. Trace warnings concern optional MongoDB authentication/compression/telemetry integrations that this deployment does not use; an actual Vercel build is required next.
+
+The first release uses a private SWS_ADMIN_EMAILS allowlist as the server-side source of admin access. Approved identities are created only after successful email-code verification; generic library signup/account-edit endpoints are not exposed. Every protected request checks both the session and current allowlist. A separate group/role administration UI is deferred.
+
+Status history is embedded atomically with each inquiry update, retaining the latest 100 changes, rather than using a second collection/transaction. Existing records use version 0 until their first admin status update; existing inquiry IDs and content are not rewritten.
