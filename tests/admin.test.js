@@ -85,3 +85,17 @@ test('missing configuration and database failures fail closed without leaking da
   const failed = await server(t, { store: { listInquiries: async () => { throw Error('secret database details'); } } }); const cookie = await failed.login();
   const r = await failed.request('/api/admin/inquiries', { cookie }); assert.equal(r.status, 503); assert.doesNotMatch(await r.text(), /secret database/);
 });
+
+test('forged session cookies do not grant access', async t => {
+  const s = await server(t);
+  assert.equal((await s.request('/api/admin/inquiries', { cookie: 'test_auth_.session_token=forged.admin.value' })).status, 401);
+});
+
+test('configuration rejects untrusted origins and mail delivery failures are explicit to the sender', async () => {
+  const { adminConfig, codeMailer } = require('../lib/admin-config');
+  const base = { SWS_ADMIN_ENABLED: 'true', SWS_AUTH_SECRET: randomBytes(32).toString('hex'), SWS_ADMIN_EMAILS: ' ADMIN@example.com,admin@example.com ' };
+  assert.equal(adminConfig({ ...base, SWS_AUTH_ORIGIN: 'http://localhost:4000' }).emails.size, 1);
+  for (const origin of ['http://foreign.example', 'https://trusted.example/path', 'https://trusted.example/', 'https://user:password@trusted.example']) assert.throws(() => adminConfig({ ...base, SWS_AUTH_ORIGIN: origin }));
+  assert.equal(adminConfig({}), null);
+  await assert.rejects(codeMailer({ SMTP_HOST: 'smtp.example.com', MAIL_FROM: 'site@example.com' }, { sendMail: async () => ({ accepted: [], rejected: ['admin@example.com'] }) })('admin@example.com', '123456'), /MAIL_FAILED/);
+});

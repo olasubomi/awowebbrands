@@ -1,6 +1,6 @@
 # Service inquiry API — first increment
 
-Same-origin JSON API. This is a public intake, with no account or client-project access. Staff authorization and durable inquiry records are future work.
+Same-origin JSON API. This is a public intake, with no account or client-project access. Inquiries are stored durably in MongoDB. The staff sign-in/dashboard Preview is documented in [admin-api.md](admin-api.md); client-project access remains future work.
 
 ## GET /api/services
 
@@ -78,3 +78,6 @@ Import `docs/Soft-Web-Services.postman_collection.json` in Postman. It includes 
 5. Do not store SMTP credentials or real customer data in shared collection exports. `baseUrl` can later point to a verified staging deployment.
 
 The collection is a checked-in developer artifact, not a published Postman workspace. Update its examples whenever the API or catalog changes. A shared OpenAPI contract and Swagger viewer remain a later documentation increment.
+
+
+Staff-only endpoints and setup: [Admin API guide](admin-api.md). Public request contracts above are unchanged.

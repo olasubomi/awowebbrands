@@ -1,6 +1,6 @@
 # Admin login and inquiry dashboard — first increment
 
-Status: backend implementation in progress, 26 October 2026. The isolated ESM authentication module and protected inquiry APIs are implemented; the interface is still a placeholder. Production remains unchanged.
+Status: Preview implementation, 26 October 2026. The auth module, protected APIs and staff interface are implemented. Production remains unchanged. See [admin-api.md](admin-api.md) for the implemented contract, configuration, schema and verification limits.
 
 ## Goal and user stories
 
@@ -86,3 +86,8 @@ Node 22.23.4 passes the auth/session tests and existing intake tests. The deploy
 The first release uses a private SWS_ADMIN_EMAILS allowlist as the server-side source of admin access. Approved identities are created only after successful email-code verification; generic library signup/account-edit endpoints are not exposed. Every protected request checks both the session and current allowlist. A separate group/role administration UI is deferred.
 
 Status history is embedded atomically with each inquiry update, retaining the latest 100 changes, rather than using a second collection/transaction. Existing records use version 0 until their first admin status update; existing inquiry IDs and content are not rewritten.
+
+
+## Interface checkpoint
+
+Added responsive staff sign-in and inquiry list/detail screens, pagination, service/status filters, atomic status revision handling, sign-out, and a Staff sign-in footer entry. No decorative arrows or client portal are added. Full real-library browser flows pass with mocked mail at four viewport widths; see the Admin API guide for the real-Atlas verification gap and Preview handoff.
