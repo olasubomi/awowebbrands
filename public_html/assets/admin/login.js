@@ -25,7 +25,7 @@
   });
   codeForm.addEventListener('submit', async event => {
     event.preventDefault(); if (busy) return; lock(true); notify('Checking your code…');
-    try { await post('/api/admin-auth/verify-code', { email, code: codeInput.value.trim() }); location.assign('/admin/inquiries'); }
+    try { await post('/api/admin-auth/verify-code', { email, code: codeInput.value.trim() }); location.assign('/workspace'); }
     catch (error) { notify(error.message, true); codeInput.focus(); } finally { lock(false); }
   });
   document.getElementById('change-email').addEventListener('click', () => { codeForm.hidden = true; emailForm.hidden = false; notify('Enter your approved email address. Wait at least a minute before requesting another code.'); emailInput.focus(); });

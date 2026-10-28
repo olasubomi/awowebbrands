@@ -1,3 +1,7 @@
+# Staff access extension
+
+See [staff-access.md](staff-access.md) for employee roles, invitations and the new workspace. When enabled, private membership permissions extend the bootstrap allowlist described below.
+
 # Staff sign-in and inquiry administration
 
 Preview implementation. Express remains the web/API framework. Better Auth 1.7.13 provides verification and sessions from one isolated ESM module; the rest of the application remains CommonJS JavaScript. No TypeScript or framework migration is required.

@@ -33,6 +33,18 @@ test('MongoDB adapter signs in and atomically consumes codes; inquiry updates pr
   const changed = await store.getInquiry(id); assert.equal(changed.version, 1); assert.equal(changed.statusHistory.length, 1); assert.equal(changed.statusHistory[0].changedBy, 'actor');
   const raw = await db.collection('inquiries').findOne({ _id: id }); assert.equal(raw.digest, 'private'); assert.equal(raw.acknowledgmentSent, true);
   const list = await store.listInquiries({ page: 1, status: '', serviceId: '' }); assert.equal(list.inquiries[0].id, id);
+  assert.ok(await store.inviteStaff('staff@example.com', ['employee'], 'actor'));
+  assert.equal(await store.inviteStaff('staff@example.com', ['employee'], 'actor'), null);
+  assert.equal((await store.activateStaff('staff@example.com')).status, 'active');
+  const staffUpdates = await Promise.all([
+    store.updateStaff('staff@example.com', ['employee'], 'suspended', 1, 'actor'),
+    store.updateStaff('staff@example.com', ['employee', 'product-manager'], 'active', 1, 'actor')
+  ]);
+  assert.equal(staffUpdates.filter(Boolean).length, 1);
+  const member = await store.getStaff('staff@example.com'); assert.equal(member.version, 2); assert.ok(member.sessionValidAfter); assert.equal(member.history.length, 3);
+  assert.equal((await store.listStaff('')).members.length, 1);
+  await db.collection('sws_staff_preview').insertOne({ _id: 'expired@example.com', status: 'invited', roles: ['employee'], version: 0, invitationExpiresAt: new Date(0) });
+  assert.equal(await store.activateStaff('expired@example.com'), null);
   const other = createMongoStore(env);
   t.after(async () => { await store.close(); await other.close(); });
   const a = await store.adminLimit('same-address', 1, 600, Date.now());

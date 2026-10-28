@@ -39,6 +39,14 @@
       "key": "inquiryVersion",
       "value": "0",
       "type": "string"
+    },
+    {
+      "key": "staffEmail",
+      "value": "employee@example.com"
+    },
+    {
+      "key": "staffVersion",
+      "value": "0"
     }
   ],
   "item": [
@@ -1327,6 +1335,80 @@
             ],
             "url": "{{baseUrl}}/api/admin-auth/sign-out",
             "description": "Staff Preview only. Use the exact configured sign-in origin and cookie jar. Keep email, code and cookies in local/private variables; do not share their values."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Staff team",
+      "description": "Sign in first with the existing staff login requests. Uses the cookie jar; real email codes must be entered manually. See docs/staff-access.md.",
+      "item": [
+        {
+          "name": "My workspace",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/me"
+          }
+        },
+        {
+          "name": "List staff",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/admin/team"
+          }
+        },
+        {
+          "name": "Approve staff invitation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/team",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staffEmail}}\",\n  \"roles\": [\n    \"employee\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update staff access",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/team/{{staffEmail}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"roles\": [\n    \"employee\",\n    \"product-manager\"\n  ],\n  \"status\": \"active\",\n  \"version\": {{staffVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         }
       ]
