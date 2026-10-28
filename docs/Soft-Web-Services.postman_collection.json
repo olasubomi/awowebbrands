@@ -1412,6 +1412,71 @@
           }
         }
       ]
+    },
+    {
+      "name": "Jira My Work",
+      "description": "Sign in as approved staff first. Consent must be completed in the same browser session, not just Postman; see docs/jira-my-work.md. Disconnect removes local credentials.",
+      "item": [
+        {
+          "name": "Connection status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/jira"
+          }
+        },
+        {
+          "name": "Start Jira consent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/jira/connect",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "My assigned SWS tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/jira/tasks"
+          }
+        },
+        {
+          "name": "Disconnect my Jira account",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/jira"
+          }
+        }
+      ]
     }
   ]
 }

@@ -76,3 +76,5 @@ Existing records missing `relationship` read as Employee. The legacy `employee` 
 A contractor Developer has no automatic access to projects, customer data, GitHub repositories or deployments. Jira task/project permissions are the next increment; GitHub permissions remain separately managed. Bootstrap administrators retain their existing Employee relationship default and immutable recovery roles.
 
 Contractor extension verification: 38 tests passed on the available Node 24 runtime, one real-Mongo test skipped. Includes a contractor Developer login, denial of customer inquiry/team APIs, relationship validation, basic staff without extra roles, and unchanged legacy records. The local Node 22 download was unavailable (registry returned 403); the Preview build remains the Node 22 bundle check. A fresh browser layout check for these controls has not been run in this environment.
+
+Jira My Work is now implemented behind separate configuration; see [jira-my-work.md](jira-my-work.md) for status, API, setup and remaining live validation. Earlier references to Jira as the next increment describe the previous checkpoint.

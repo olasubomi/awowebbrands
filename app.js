@@ -30,7 +30,7 @@ function createApp(options = {}) {
     if (env.VERCEL_ENV === 'preview') res.set('X-Robots-Tag', 'noindex, nofollow');
     next();
   });
-  registerAdmin(app, { env, store, authRuntime: options.authRuntime, sendAdminCode: options.sendAdminCode });
+  registerAdmin(app, { env, store, authRuntime: options.authRuntime, sendAdminCode: options.sendAdminCode, jiraService: options.jiraService });
   app.get('/api/services', (req, res) => res.json({ categories, services, generalService }));
 
   app.post('/api/inquiries', express.json({ limit: '20kb' }), async (req, res) => {

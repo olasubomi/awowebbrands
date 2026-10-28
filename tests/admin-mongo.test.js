@@ -45,6 +45,16 @@ test('MongoDB adapter signs in and atomically consumes codes; inquiry updates pr
   assert.equal((await store.listStaff('')).members.length, 1);
   await db.collection('sws_staff_preview').insertOne({ _id: 'expired@example.com', status: 'invited', roles: ['employee'], version: 0, invitationExpiresAt: new Date(0) });
   assert.equal(await store.activateStaff('expired@example.com'), null);
+  const state = { _id: 'hashed-state', userId: 'one', sessionId: 'hashed-session', expiresAt: new Date(Date.now() + 60000) };
+  await store.jira.putState(state);
+  assert.equal(await store.jira.consumeState(state._id, 'other', state.sessionId), null);
+  assert.ok(await store.jira.consumeState(state._id, state.userId, state.sessionId));
+  assert.equal(await store.jira.consumeState(state._id, state.userId, state.sessionId), null);
+  const lease = await store.jira.lock('one'); assert.ok(lease); assert.equal(await store.jira.lock('one'), null);
+  await lease.save({ encrypted: 'test-ciphertext', accountId: 'jira-id' }); await lease.release();
+  assert.equal((await store.jira.getConnection('one')).encrypted, 'test-ciphertext');
+  const disconnectLease = await store.jira.lock('one'); await disconnectLease.disconnect(); await disconnectLease.release();
+  assert.equal((await store.jira.getConnection('one')).encrypted, null);
   const other = createMongoStore(env);
   t.after(async () => { await store.close(); await other.close(); });
   const a = await store.adminLimit('same-address', 1, 600, Date.now());

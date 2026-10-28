@@ -42,9 +42,11 @@ test('staff invitation requires admin; verified employee has workspace but no in
   assert.equal((await s.request('/api/admin/team', cookie, 'POST', { email: 'evil@example.com', relationship: 'employee', roles: ['developer', 'admin'] })).status, 403);
   r = await s.request('/api/admin/team/staff%40example.com', admin, 'PATCH', { relationship: 'employee', roles: ['developer'], status: 'suspended', version: 1 }); assert.equal(r.status, 200);
   assert.equal((await s.request('/api/workspace/me', cookie)).status, 403);
+  assert.equal((await s.request('/api/workspace/jira/tasks', cookie)).status, 403);
   const before = s.sent.length; await s.request('/api/admin-auth/request-code', '', 'POST', { email: 'staff@example.com' }); assert.equal(s.sent.length, before);
   await s.request('/api/admin/team/staff%40example.com', admin, 'PATCH', { relationship: 'employee', roles: ['developer'], status: 'active', version: 2 });
   assert.equal((await s.request('/api/workspace/me', cookie)).status, 403);
+  assert.equal((await s.request('/api/workspace/jira/tasks', cookie)).status, 403);
   assert.equal((await s.request('/api/workspace/me', await s.login('staff@example.com'))).status, 200);
 });
 test('product-manager has work permission, cannot manage access or customer inquiries; stale writes and bootstrap changes are rejected', async t => {
