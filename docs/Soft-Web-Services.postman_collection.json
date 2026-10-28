@@ -1376,7 +1376,7 @@
             "url": "{{baseUrl}}/api/admin/team",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"email\": \"{{staffEmail}}\",\n  \"roles\": [\n    \"employee\"\n  ]\n}",
+              "raw": "{\n  \"email\": \"{{staffEmail}}\",\n  \"relationship\": \"contractor\",\n  \"roles\": [\n    \"developer\"\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -1402,7 +1402,7 @@
             "url": "{{baseUrl}}/api/admin/team/{{staffEmail}}",
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"roles\": [\n    \"employee\",\n    \"product-manager\"\n  ],\n  \"status\": \"active\",\n  \"version\": {{staffVersion}}\n}",
+              "raw": "{\n  \"relationship\": \"contractor\",\n  \"roles\": [\n    \"developer\",\n    \"product-manager\"\n  ],\n  \"status\": \"active\",\n  \"version\": {{staffVersion}}\n}",
               "options": {
                 "raw": {
                   "language": "json"

@@ -11,9 +11,9 @@ async function fixture(t) {
     async adminLimit() { return { allowed: true }; },
     async getStaff(email) { return members.get(email) || null; },
     async listStaff() { return { members: [...members.values()], next: null }; },
-    async inviteStaff(email, roles) { if (members.has(email)) return null; const m = { email, roles, status: 'invited', version: 0, invitationExpiresAt: new Date(Date.now() + 86400000) }; members.set(email, m); return m; },
+    async inviteStaff(email, roles, actor, relationship = 'employee') { if (members.has(email)) return null; const m = { email, roles, relationship, status: 'invited', version: 0, invitationExpiresAt: new Date(Date.now() + 86400000) }; members.set(email, m); return m; },
     async activateStaff(email) { const m = members.get(email); if (!m || m.status === 'suspended' || new Date(m.invitationExpiresAt) <= new Date()) return null; if (m.status === 'invited') { m.status = 'active'; m.version++; } return m; },
-    async updateStaff(email, roles, status, version) { const m = members.get(email); if (!m || m.version !== version) return null; Object.assign(m, { roles, status, version: version + 1, sessionValidAfter: new Date() }); return m; }
+    async updateStaff(email, roles, status, version, actor, relationship = 'employee') { const m = members.get(email); if (!m || m.version !== version) return null; Object.assign(m, { roles, relationship, status, version: version + 1, sessionValidAfter: new Date() }); return m; }
   };
   const config = { origin, secret: randomBytes(32).toString('hex'), emails: new Set(['admin@example.com']), prefix: 'staff_test_' };
   const access = createStaffAccess(config, store, true); config.allowEmail = email => access.allowed(email);
@@ -34,37 +34,56 @@ async function fixture(t) {
 test('staff invitation requires admin; verified employee has workspace but no inquiry/team access; suspension applies to existing session', async t => {
   const s = await fixture(t), admin = await s.login('admin@example.com');
   assert.equal((await s.request('/api/admin/team')).status, 401);
-  let r = await s.request('/api/admin/team', admin, 'POST', { email: 'Staff@example.com', roles: ['employee'] }); assert.equal(r.status, 201);
+  let r = await s.request('/api/admin/team', admin, 'POST', { email: 'Staff@example.com', relationship: 'employee', roles: ['developer'] }); assert.equal(r.status, 201);
   const cookie = await s.login('staff@example.com'); assert.equal(s.members.get('staff@example.com').status, 'active');
   assert.equal((await s.request('/workspace', cookie)).status, 200);
-  assert.deepEqual((await (await s.request('/api/workspace/me', cookie)).json()).roles, ['employee']);
+  assert.deepEqual((await (await s.request('/api/workspace/me', cookie)).json()).roles, ['developer']);
   for (const path of ['/api/admin/team', '/admin/team', '/api/admin/inquiries']) assert.equal((await s.request(path, cookie)).status, 403);
-  assert.equal((await s.request('/api/admin/team', cookie, 'POST', { email: 'evil@example.com', roles: ['employee', 'admin'] })).status, 403);
-  r = await s.request('/api/admin/team/staff%40example.com', admin, 'PATCH', { roles: ['employee'], status: 'suspended', version: 1 }); assert.equal(r.status, 200);
+  assert.equal((await s.request('/api/admin/team', cookie, 'POST', { email: 'evil@example.com', relationship: 'employee', roles: ['developer', 'admin'] })).status, 403);
+  r = await s.request('/api/admin/team/staff%40example.com', admin, 'PATCH', { relationship: 'employee', roles: ['developer'], status: 'suspended', version: 1 }); assert.equal(r.status, 200);
   assert.equal((await s.request('/api/workspace/me', cookie)).status, 403);
   const before = s.sent.length; await s.request('/api/admin-auth/request-code', '', 'POST', { email: 'staff@example.com' }); assert.equal(s.sent.length, before);
-  await s.request('/api/admin/team/staff%40example.com', admin, 'PATCH', { roles: ['employee'], status: 'active', version: 2 });
+  await s.request('/api/admin/team/staff%40example.com', admin, 'PATCH', { relationship: 'employee', roles: ['developer'], status: 'active', version: 2 });
   assert.equal((await s.request('/api/workspace/me', cookie)).status, 403);
   assert.equal((await s.request('/api/workspace/me', await s.login('staff@example.com'))).status, 200);
 });
 test('product-manager has work permission, cannot manage access or customer inquiries; stale writes and bootstrap changes are rejected', async t => {
   const s = await fixture(t), admin = await s.login('admin@example.com');
-  await s.request('/api/admin/team', admin, 'POST', { email: 'pm@example.com', roles: ['employee', 'product-manager'] });
+  await s.request('/api/admin/team', admin, 'POST', { email: 'pm@example.com', relationship: 'employee', roles: ['developer', 'product-manager'] });
   const pm = await s.login('pm@example.com');
   const me = await (await s.request('/api/workspace/me', pm)).json(); assert.ok(me.permissions.includes('work:manage')); assert.ok(!me.permissions.includes('inquiries:manage'));
   assert.equal((await s.request('/admin/team', pm)).status, 403);
-  assert.equal((await s.request('/api/admin/team/pm%40example.com', admin, 'PATCH', { roles: ['employee'], status: 'active', version: 0 })).status, 409);
-  assert.equal((await s.request('/api/admin/team/admin%40example.com', admin, 'PATCH', { roles: ['employee'], status: 'suspended', version: 0 })).status, 409);
-  for (const roles of [['owner'], ['admin'], ['employee', 'employee']]) assert.equal((await s.request('/api/admin/team', admin, 'POST', { email: 'bad@example.com', roles })).status, 400);
-  assert.equal((await s.request('/api/admin/team', admin, 'POST', { email: 'bad@example.com', roles: ['employee'], permissions: ['team:manage'] })).status, 400);
-  assert.equal((await s.request('/api/admin/team', admin, 'POST', { email: 'bad@example.com', roles: ['employee'] }, 'https://evil.example')).status, 403);
+  assert.equal((await s.request('/api/admin/team/pm%40example.com', admin, 'PATCH', { relationship: 'employee', roles: ['developer'], status: 'active', version: 0 })).status, 409);
+  assert.equal((await s.request('/api/admin/team/admin%40example.com', admin, 'PATCH', { relationship: 'employee', roles: ['developer'], status: 'suspended', version: 0 })).status, 409);
+  for (const roles of [['owner'], ['employee'], ['developer', 'developer']]) assert.equal((await s.request('/api/admin/team', admin, 'POST', { email: 'bad@example.com', relationship: 'employee', roles })).status, 400);
+  assert.equal((await s.request('/api/admin/team', admin, 'POST', { email: 'bad@example.com', relationship: 'employee', roles: ['developer'], permissions: ['team:manage'] })).status, 400);
+  assert.equal((await s.request('/api/admin/team', admin, 'POST', { email: 'bad@example.com', relationship: 'employee', roles: ['developer'] }, 'https://evil.example')).status, 403);
   const configured = await (await s.request('/api/workspace/me', admin)).json(); assert.ok(configured.roles.includes('product-manager'));
 });
 test('expired and revoked invitations cannot request or redeem codes', async t => {
   const s = await fixture(t), admin = await s.login('admin@example.com');
-  await s.request('/api/admin/team', admin, 'POST', { email: 'late@example.com', roles: ['employee'] });
+  await s.request('/api/admin/team', admin, 'POST', { email: 'late@example.com', relationship: 'employee', roles: ['developer'] });
   await s.request('/api/admin-auth/request-code', '', 'POST', { email: 'late@example.com' }); const code = s.sent.at(-1).code;
   s.members.get('late@example.com').invitationExpiresAt = new Date(0);
   assert.equal((await s.request('/api/admin-auth/verify-code', '', 'POST', { email: 'late@example.com', code })).status, 400);
   const before = s.sent.length; await s.request('/api/admin-auth/request-code', '', 'POST', { email: 'late@example.com' }); assert.equal(s.sent.length, before);
+});
+
+test('contractor Developer can sign in but cannot assign roles or access inquiries; relationship grants no permissions', async t => {
+  const s = await fixture(t), admin = await s.login('admin@example.com');
+  const invitation = await s.request('/api/admin/team', admin, 'POST', { email: 'contractor@example.com', relationship: 'contractor', roles: ['developer'] });
+  assert.equal(invitation.status, 201); assert.equal((await invitation.json()).member.relationship, 'contractor');
+  const cookie = await s.login('contractor@example.com');
+  const me = await (await s.request('/api/workspace/me', cookie)).json();
+  assert.equal(me.relationship, 'contractor'); assert.deepEqual(me.roles, ['developer']); assert.deepEqual(me.permissions, ['workspace:read']);
+  for (const path of ['/api/admin/team', '/api/admin/inquiries']) assert.equal((await s.request(path, cookie)).status, 403);
+  for (const relationship of ['admin', '', null]) assert.equal((await s.request('/api/admin/team', admin, 'POST', { email: 'bad@example.com', relationship, roles: ['developer'] })).status, 400);
+  const base = await s.request('/api/admin/team', admin, 'POST', { email: 'base@example.com', relationship: 'contractor', roles: [] }); assert.equal(base.status, 201);
+  assert.deepEqual((await (await s.request('/api/workspace/me', await s.login('base@example.com'))).json()).permissions, ['workspace:read']);
+});
+test('legacy Employee role retains workspace access without inventing a Developer role or changing stored data', async () => {
+  const record = { email: 'legacy@example.com', status: 'active', roles: ['employee', 'product-manager'] };
+  const access = createStaffAccess({ emails: new Set() }, { getStaff: async () => record }, true);
+  const member = await access.current(record.email);
+  assert.equal(member.relationship, 'employee'); assert.deepEqual(member.roles, ['product-manager']); assert.ok(member.permissions.includes('workspace:read')); assert.deepEqual(record.roles, ['employee', 'product-manager']);
 });

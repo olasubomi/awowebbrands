@@ -4,7 +4,7 @@ Status: implemented for Preview review; production release remains separate. Jir
 
 ## Sign-in flow
 
-Homepage footer → Staff sign-in (`/login`) → email code → My workspace (`/workspace`). An administrator follows Team & Access (`/admin/team`) to approve staff, edit roles or suspend access. Only administrators can view inquiries. No public registration is exposed.
+Homepage footer → Staff sign-in (`/login`) → email code → My workspace (`/workspace`). An administrator follows Team & Access (`/admin/team`) to approve staff, edit roles or suspend access. Only administrators can view inquiries. Employee/Contractor is a separate working relationship, not a role. No public registration is exposed.
 
 An invitation approves an email for 7 days. The administrator shares the site's sign-in link; this action sends no invitation email. A successful email-code sign-in activates membership. Expired invitations can be renewed by saving status Invited. Suspension blocks existing sessions on their next request. Every access update invalidates older sessions, including after reactivation; staff must sign in again. In-flight requests already authorized may finish.
 
@@ -12,17 +12,17 @@ An invitation approves an email for 7 days. The administrator shares the site's 
 
 | Role | Access |
 |---|---|
-| Employee | Own workspace |
+| Developer | Own workspace; assigned development work when task integration is added |
 | Product Manager | Own workspace; reserved work-management permission for the next increment |
 | Administrator | Workspace, customer inquiries, Team & Access |
 
-All staff include Employee and may have multiple roles. Product Manager does not grant inquiry access or permission to assign roles. Permissions are evaluated on the server per request, not accepted from the browser. An administrator cannot remove their own administrator access. The configured bootstrap administrators cannot be suspended or edited through the website; private environment configuration remains the recovery mechanism.
+All approved staff have basic access to their own workspace. Functional roles are optional and multiple roles can be assigned. The working relationship is `employee` or `contractor` and never grants extra permissions. Product Manager does not grant inquiry access or permission to assign roles. Permissions are evaluated on the server per request, not accepted from the browser. An administrator cannot remove their own administrator access. The configured bootstrap administrators cannot be suspended or edited through the website; private environment configuration remains the recovery mechanism.
 
 ## Configuration
 
 Keep the existing admin/SMTP/Mongo configuration. Add `SWS_STAFF_ENABLED=true` to Preview to enable membership management. Without it, existing configured administrators can still sign in; membership management is disabled.
 
-Optional sensitive `SWS_PRODUCT_MANAGER_EMAILS` is a comma-separated subset of `SWS_ADMIN_EMAILS` to give a bootstrap administrator the additional Product Manager role. Store real addresses only in private configuration. Non-bootstrap Product Managers are assigned through Team & Access.
+Optional sensitive `SWS_PRODUCT_MANAGER_EMAILS` is a comma-separated subset of `SWS_ADMIN_EMAILS` to give a bootstrap administrator the additional Product Manager role. Store real addresses only in private configuration. Non-bootstrap Product Managers and Developers are assigned through Team & Access.
 
 CommonJS, Express, Node 22 and the isolated Better Auth ESM module are retained. No dependency versions changed. Production and Preview use separate membership collections.
 
@@ -33,7 +33,8 @@ Collection `sws_staff_preview` or `sws_staff_prod`:
 | Field | Meaning |
 |---|---|
 | `_id` | Normalized verified email, unique primary key |
-| `roles` | Employee plus optional Product Manager and Administrator |
+| `relationship` | employee or contractor; independent of permissions |
+| `roles` | Zero or more: developer, product-manager, admin |
 | `status` | invited, active, suspended |
 | `version` | Revision counter; stale edits receive 409 |
 | `invitationExpiresAt` | Last date an unaccepted invitation permits sign-in |
@@ -51,8 +52,8 @@ All private responses are no-store and noindex. Mutations require the exact conf
 |---|---|---|
 | GET | `/api/workspace/me` | Signed-in staff email, roles and effective permissions |
 | GET | `/api/admin/team?after=email` | Members, next cursor, configured admins, assignable roles |
-| POST | `/api/admin/team` | Approve invitation: `{ "email": "employee@example.com", "roles": ["employee"] }` |
-| PATCH | `/api/admin/team/:email` | Replace access: `{ "roles": ["employee", "product-manager"], "status": "active", "version": 1 }` |
+| POST | `/api/admin/team` | Approve invitation: `{ "email": "developer@example.com", "relationship": "contractor", "roles": ["developer"] }` |
+| PATCH | `/api/admin/team/:email` | Replace access: `{ "relationship": "contractor", "roles": ["developer", "product-manager"], "status": "active", "version": 1 }` |
 
 Success: 200 (201 invitation); invalid input 400; missing session 401; insufficient/revoked access or wrong Origin 403; duplicate/stale/protected edit 409; unavailable database/configuration 503. Unknown roles, extra fields and duplicate roles are rejected. Administrator grants and suspensions receive a UI confirmation. The endpoint permissions remain authoritative if the UI is bypassed.
 
@@ -66,4 +67,12 @@ Before release, verify a real Atlas/SMTP Preview sign-in and a complete employee
 
 Next: authorize Jira separately for the website, map staff to verified Jira account IDs, and load only approved SWS project tasks. Then add work requests, weekly/monthly milestones and Calendar free/busy scheduling. Presence, meeting requirements, reminder cadence and office hours still need implementation; no monitoring is implied by login.
 
-Verified locally: Node 22 suite: 36 passed, 1 skipped (real MongoDB test requires a test URI). Browser with real Better Auth memory adapter and mocked delivery: sign-in, workspace, invitation form and sign-out passed; widths 1440, 834, 375 and 320 showed no page overflow. Mobile layout visually inspected. No real staff accounts were invited by these checks.
+Prior team-access increment verification: Node 22 suite: 36 passed, 1 skipped (real MongoDB test requires a test URI). Browser with real Better Auth memory adapter and mocked delivery: sign-in, workspace, invitation form and sign-out passed; widths 1440, 834, 375 and 320 showed no page overflow. Mobile layout visually inspected. No real staff accounts were invited by these checks.
+
+## Employee and contractor compatibility
+
+Existing records missing `relationship` read as Employee. The legacy `employee` role is omitted from effective functional roles; basic workspace access remains available to approved active staff. Existing Product Manager and Administrator responsibilities remain. No Developer role is inferred. New invitation/update requests require an explicit `relationship` and accept only functional roles; `roles: []` means basic workspace access. Saving a legacy record stores the new representation for that person. History is preserved unchanged. No bulk data rewrite or changes to Chop Chow are required.
+
+A contractor Developer has no automatic access to projects, customer data, GitHub repositories or deployments. Jira task/project permissions are the next increment; GitHub permissions remain separately managed. Bootstrap administrators retain their existing Employee relationship default and immutable recovery roles.
+
+Contractor extension verification: 38 tests passed on the available Node 24 runtime, one real-Mongo test skipped. Includes a contractor Developer login, denial of customer inquiry/team APIs, relationship validation, basic staff without extra roles, and unchanged legacy records. The local Node 22 download was unavailable (registry returned 403); the Preview build remains the Node 22 bundle check. A fresh browser layout check for these controls has not been run in this environment.
