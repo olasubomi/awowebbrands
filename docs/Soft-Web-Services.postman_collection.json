@@ -1617,6 +1617,124 @@
           }
         }
       ]
+    },
+    {
+      "name": "Google Calendar and Meet",
+      "description": "Organizer/admin session required. Consent completes in the same browser session. Calendar creation/sync writes to the connected Google account; run only intentionally, not in unattended collection runs. See docs/google-calendar-meet.md.",
+      "item": [
+        {
+          "name": "Google setup status",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/workspace/google-calendar",
+            "header": []
+          }
+        },
+        {
+          "name": "Start Google consent",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/workspace/google-calendar/connect",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create business calendar",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/workspace/google-calendar/calendar",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Link event and create Meet",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/workspace/google-calendar/events/{{eventId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 0,\n  \"withMeet\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Disconnect Google",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/workspace/google-calendar",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
     }
   ]
 }

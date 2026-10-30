@@ -108,3 +108,11 @@ Automated HTTP tests use actual Better Auth with memory adapter and simulated st
 Before production, verify a real member invitation/sign-in, event creation, RSVP, meeting-link visibility, attendance correction and milestone recalculation against Atlas. Browser layout review and actual Google calendar import remain pending. No real events, RSVP records, invitations, or notification emails are created by automated tests. SWS-22's cross-account Jira check remains backlogged; this release does not mark it complete.
 
 Current local results: 51 tests passed, one optional real-Mongo test skipped, on Node 24. JavaScript syntax checks and HTML form-label/unique-ID checks passed. Vercel Preview builds target Node 22. Browser layout, calendar import and live Atlas RSVP/attendance validation remain pending; no claims of those checks passing are made.
+
+## Specific event errors and Google linking
+
+Event create/update validation now returns `errors` keyed by `title`, `description`, `startsAt`, `endsAt`, `timezone`, `visibility`, `meetingUrl`, `status` or `_form`, alongside a safe summary. An omitted/empty/whitespace-only meeting URL is accepted; a supplied link must be complete HTTPS. Future start time, end-after-start, maximum seven-day duration and historical date/audience rules remain enforced. The original reported rejection cannot be attributed to a particular field without that payload; the previous generic error hid the reason.
+
+The browser displays errors beside the matching fields, a persistent summary immediately above Save, and a fixed on-screen notification. It focuses the first invalid field and retains all entries. Native validation no longer prevents these custom messages from being shown. Messages elsewhere on the events page also receive a visible notification so they do not require scrolling to the top.
+
+Optional Google Calendar/Meet linking is now implemented separately behind configuration; see [google-calendar-meet.md](google-calendar-meet.md). Earlier statements that Google linking is absent describe the previous checkpoint. Google remains optional and saving an SWS event never requires a meeting URL or Google connection.

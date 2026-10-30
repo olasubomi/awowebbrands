@@ -7,7 +7,7 @@ const { buildFixture } = require('./helpers/auth-fixture');
 const { createStaffAccess } = require('../lib/staff-access');
 const { audiences, validateEvent, eventView, calendar } = require('../lib/community-model');
 function input(extra = {}) { return { title: 'Weekly engineering session', description: 'Learn together', startsAt: new Date(Date.now() + 3600000).toISOString(), endsAt: new Date(Date.now() + 7200000).toISOString(), timezone: 'America/Los_Angeles', visibility: 'public', meetingUrl: 'https://meet.google.com/abc-defg-hij', status: 'scheduled', ...extra }; }
-async function fixture(t) {
+async function fixture(t, options = {}) {
   const members = new Map([
     ['member@example.com', { email: 'member@example.com', relationship: null, roles: ['community-member'], status: 'active' }],
     ['organizer@example.com', { email: 'organizer@example.com', relationship: null, roles: ['community-member', 'event-organizer'], status: 'active' }],
@@ -24,11 +24,11 @@ async function fixture(t) {
     async attendance(event, user, email, attendance, version) { const row = responses.get(event + ':' + user); if (!row || row.version !== version) return null; row.attendance = attendance; row.version++; return row; },
     async milestones(userId) { const rows = [...responses.values()].filter(r => r.userId === userId && r.attendance === 'attended' && events.get(r.eventId)?.status !== 'cancelled'); return { total: rows.length, firstAttendedAt: rows.length ? new Date() : null, participatedThisWeek: !!rows.length, thisMonth: rows.length, timezone: 'America/Los_Angeles' }; }
   };
-  const store = { community, getStaff: async email => members.get(email), activateStaff: async email => members.get(email), adminLimit: async () => ({ allowed: true }) };
-  const config = { origin: 'http://localhost:4000', secret: randomBytes(32).toString('hex'), emails: new Set(['admin@example.com']), prefix: 'community_auth_' };
+  const store = { community, googleCalendar: options.googleStore, getStaff: async email => members.get(email), activateStaff: async email => members.get(email), adminLimit: async () => ({ allowed: true }) };
+  const config = { origin: options.origin || 'http://localhost:4000', secret: randomBytes(32).toString('hex'), emails: new Set(['admin@example.com']), prefix: 'community_auth_' };
   const access = createStaffAccess(config, store, true); config.allowEmail = email => access.allowed(email);
   const f = await buildFixture(config);
-  const env = { SWS_ADMIN_ENABLED: 'true', SWS_STAFF_ENABLED: 'true', SWS_COMMUNITY_ENABLED: 'true', SWS_AUTH_ORIGIN: config.origin, SWS_AUTH_SECRET: config.secret, SWS_ADMIN_EMAILS: 'admin@example.com' };
+  const env = { SWS_ADMIN_ENABLED: 'true', SWS_STAFF_ENABLED: 'true', SWS_COMMUNITY_ENABLED: 'true', SWS_AUTH_ORIGIN: config.origin, SWS_AUTH_SECRET: config.secret, SWS_ADMIN_EMAILS: 'admin@example.com', ...(options.env || {}) };
   const app = createApp({ env, store, authRuntime: f.runtime, enablePhoneVerification: false });
   const server = app.listen(0, '127.0.0.1'); await new Promise(r => server.once('listening', r)); t.after(() => new Promise(r => server.close(r)));
   const request = (path, cookie, method = 'GET', body, origin = config.origin) => fetch('http://127.0.0.1:' + server.address().port + path, { method, redirect: 'manual', headers: { ...(cookie ? { Cookie: cookie } : {}), ...(method === 'GET' ? {} : { Origin: origin, 'Content-Type': 'application/json' }) }, ...(body ? { body: JSON.stringify(body) } : {}) });
@@ -47,7 +47,7 @@ test('public browsing hides member/staff events, meeting links and rosters; appr
   const me = await (await f.request('/api/workspace/me', cookie)).json(); assert.equal(me.relationship, null); assert.deepEqual(me.roles, ['community-member']);
   assert.equal((await (await f.request('/api/workspace/events', cookie)).json()).events.length, 2);
   assert.equal((await f.request('/api/workspace/events/' + staffEvent._id, cookie)).status, 404);
-  for (const path of ['/api/admin/team', '/api/admin/inquiries', '/api/workspace/jira', '/api/workspace/events/' + publicEvent._id + '/participants']) assert.equal((await f.request(path, cookie)).status, 403);
+  for (const path of ['/api/admin/team', '/api/admin/inquiries', '/api/workspace/jira', '/api/workspace/google-calendar', '/api/workspace/events/' + publicEvent._id + '/participants']) assert.equal((await f.request(path, cookie)).status, 403);
   assert.equal((await f.request('/api/workspace/events', cookie, 'POST', input())).status, 403);
   assert.equal((await f.request('/api/workspace/attendance?userId=other', cookie)).status, 400);
 });
@@ -94,4 +94,28 @@ test('calendar export excludes private events and meeting URLs; Unicode folding 
   for (const line of text.split('\r\n')) assert.ok(Buffer.byteLength(line) <= 75);
   assert.equal((text.match(/\r\nBEGIN:VEVENT\r\n/g) || []).length, 1);
   assert.equal(eventView(e, null).meetingUrl, undefined);
+});
+
+test('event errors identify individual fields; optional empty or omitted meeting link does not block saving', async t => {
+  const f = await fixture(t), organizer = await f.login('organizer@example.com');
+  for (const meetingUrl of ['', '   ', undefined]) {
+    const r = await f.request('/api/workspace/events', organizer, 'POST', input({ meetingUrl })); assert.equal(r.status, 201); assert.equal((await r.json()).event.meetingUrl, '');
+  }
+  const invalid = await f.request('/api/workspace/events', organizer, 'POST', input({ title: '', startsAt: new Date(Date.now() - 60000).toISOString(), timezone: 'not-a-zone', meetingUrl: 'http://www' }));
+  assert.equal(invalid.status, 400); const errors = (await invalid.json()).errors;
+  assert.match(errors.title, /title/); assert.match(errors.startsAt, /past/); assert.match(errors.timezone, /not recognized/); assert.match(errors.meetingUrl, /https:\/\//);
+  const end = await f.request('/api/workspace/events', organizer, 'POST', input({ endsAt: new Date(Date.now() + 1000).toISOString() }));
+  assert.match((await end.json()).errors.endsAt, /later than/);
+});
+
+test('Google consent route requires organizer, exact Origin, and server-derived user/session identity', async t => {
+  const states = [];
+  const f = await fixture(t, { origin: 'https://sws.example.com', env: { SWS_GOOGLE_CALENDAR_ENABLED: 'true', SWS_GOOGLE_CALENDAR_CLIENT_ID: 'client', SWS_GOOGLE_CALENDAR_CLIENT_SECRET: 'secret', SWS_GOOGLE_CALENDAR_ENCRYPTION_KEY: randomBytes(32).toString('base64') }, googleStore: { putState: async s => states.push(s), getConnection: async () => null } });
+  const organizer = await f.login('organizer@example.com'), member = await f.login('member@example.com');
+  assert.equal((await f.request('/api/workspace/google-calendar/connect', member, 'POST', {})).status, 403);
+  assert.equal((await f.request('/api/workspace/google-calendar/connect', organizer, 'POST', {}, 'https://evil.example')).status, 403);
+  const result = await f.request('/api/workspace/google-calendar/connect', organizer, 'POST', { userId: 'forged' }); assert.equal(result.status, 200);
+  const data = await result.json(); assert.match(data.url, /^https:\/\/accounts.google.com\//); assert.equal(states.length, 1); assert.notEqual(states[0].userId, 'forged');
+  assert.equal(states[0].userId, (await (await f.request('/api/workspace/me', organizer)).json()).id);
+  assert.equal((await f.request('/api/workspace/google-calendar/callback?state=bad&code=bad', organizer)).headers.get('location'), '/workspace/events?google=failed');
 });
