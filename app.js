@@ -7,6 +7,7 @@ const { categories, services, generalService } = require('./lib/services');
 const { validateInquiry } = require('./lib/inquiry-validation');
 const { createInquiryMailer } = require('./lib/inquiry-mailer');
 const { createMongoStore } = require('./lib/inquiry-store');
+const { registerAdmin } = require('./lib/admin-routes');
 const { createSubmitInquiry } = require('./lib/submit-inquiry');
 const { inquiryFailureCode } = require('./lib/inquiry-errors');
 const { catalogPage, servicePage, aboutPage, notFoundPage, sitemap } = require('./lib/site-pages');
@@ -29,6 +30,7 @@ function createApp(options = {}) {
     if (env.VERCEL_ENV === 'preview') res.set('X-Robots-Tag', 'noindex, nofollow');
     next();
   });
+  registerAdmin(app, { env, store, authRuntime: options.authRuntime, sendAdminCode: options.sendAdminCode, jiraService: options.jiraService });
   app.get('/api/services', (req, res) => res.json({ categories, services, generalService }));
 
   app.post('/api/inquiries', express.json({ limit: '20kb' }), async (req, res) => {

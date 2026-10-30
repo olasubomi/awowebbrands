@@ -1,8 +1,8 @@
 {
   "info": {
-    "name": "Soft Web Services — Service Intake",
+    "name": "Soft Web Services \u2014 Service Intake and Staff",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
-    "description": "# Service inquiry API — first increment\n\nSame-origin JSON API. This is a public intake, with no account or client-project access. Staff authorization and durable inquiry records are future work.\n\n## GET /api/services\n\nReturns `categories`, `services`, and `generalService`. Each service includes its ID, description and question definitions. `lib/services.js` is the authoritative service schema; do not duplicate question options in clients. No prices are published.\n\n## POST /api/inquiries\n\nHeaders: `Content-Type: application/json`, `Idempotency-Key: <UUID v4>`. Browsers must use the configured public origin. Generate one key per payload and reuse it for retries of that payload.\n\nExample (replace the request key with a fresh UUID):\n\n```json\n{\n  \"serviceId\": \"not-sure\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I want to discuss a website for my business.\",\n  \"availableDays\": [\"Monday\", \"Wednesday\"],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {},\n  \"faxNumber\": \"\"\n}\n```\n\n| Field | Rules |\n|---|---|\n| serviceId | One catalog ID, or `not-sure` |\n| fullName | Required text, maximum 120 characters |\n| businessName | Optional text, maximum 160 |\n| email | Required email address, maximum 254 |\n| phone | Optional for email contact; required for phone/either; maximum 40 |\n| contactPreference | `email`, `phone`, or `either` |\n| goal | Required text, maximum 3,000; do not include sensitive data |\n| availableDays | Array of unique full English weekday names; may be empty |\n| availableTimes | Optional preference text, maximum 300 |\n| timezone | Required recognized timezone, maximum 80 |\n| answers | Object containing only the selected service's question IDs; values are strings, maximum 500 each; required/options/URL/date rules come from the catalog |\n| faxNumber | Honeypot: leave empty |\n\nUnknown top-level fields are rejected. Body limit is 20 KB. Recipient, subject and email content fields are never accepted from clients.\n\n201 returns `{reference, saved: true, notificationStatus, acknowledgmentSent, message}` after the database has accepted the inquiry. Email is attempted afterward. `notificationStatus` is `pending`, `processing`, `sent`, or `failed`. A saved inquiry remains successful even if SMTP is missing or fails. `acknowledgmentSent: false` means the requester email is unconfirmed; it does not indicate that the database save failed. Do not resubmit a saved inquiry just to trigger email.\n\nRepeating the same key and normalized payload returns the same reference across instances/restarts. Notification fields may reflect a newer delivery state; no second email attempt is started. Availability does not reserve a time. See `mongodb-setup.md` for stored fields and recovery limitations.\n\n| Status | Meaning/action |\n|---|---|\n| 400 | Invalid fields/JSON/key; correct errors (`errors` may identify fields) |\n| 403 | Browser origin rejected |\n| 409 | Key reused with changed payload; generate a new key |\n| 413 / 415 | Body too large / unsupported content type |\n| 429 | Rate limited; honor `Retry-After` |\n| 503 | Database/configuration failure before acceptance; preserve entries and retry with the same key |\n\nPOST `/api/nodeEmails` returns 410. No caller-controlled email relay remains.\n\n## API tools\n\nPostman and Thunder Client can call these endpoints using the same JSON and headers. Start with the isolated automated tests using simulated storage and delivery; do not run delivery tests against production without owner approval. Keep environment secrets out of exported collections. The automated Node tests provide executable request/response examples without sending mail or connecting to Atlas.\n\nThis increment supplies this reference and executable tests, not a generated Swagger interface. A later OpenAPI document can drive Swagger UI and Postman imports once the API expands; maintain one contract rather than independently edited copies. Codex can assist with implementation and contract checks, but is not an API runtime, authorization layer or source of truth.\n\n## Importable Postman collection\n\nImport `docs/Soft-Web-Services.postman_collection.json` in Postman. It includes the catalog request, six inquiry examples (each service plus help choosing), and saved sample responses. Saved responses are illustrative; they do not indicate that an inquiry was sent.\n\n1. Import the JSON file and open the collection documentation or a request's saved examples.\n2. To execute requests locally, run `npm ci` then `npm run preview` from the repository. The collection defaults to `http://localhost:5000`; this server is on the machine running the application, not an already deployed website.\n3. Send the catalog GET request first. Inquiry POST requests can send actual emails when SMTP is configured. Without MongoDB they return 503. With MongoDB but no SMTP they save the inquiry and return 201 with notificationStatus failed. Existing automated tests use mocked delivery; the normal preview server does not fake success.\n4. Inquiry requests generate a UUID and reuse it for unchanged payload retries. A changed payload generates a new UUID. Clear the collection variable `inquiryKey` to intentionally submit another identical inquiry.\n5. Do not store SMTP credentials or real customer data in shared collection exports. `baseUrl` can later point to a verified staging deployment.\n\nThe collection is a checked-in developer artifact, not a published Postman workspace. Update its examples whenever the API or catalog changes. A shared OpenAPI contract and Swagger viewer remain a later documentation increment.\n\n\nSaved examples are illustrative. Local baseUrl is http://localhost:5000. MongoDB is required for submission; SMTP is optional for acceptance. Request scripts reuse keys for unchanged payload retries. No SMTP secrets belong in this collection."
+    "description": "# Service inquiry API \u2014 first increment\n\nSame-origin JSON API. This is a public intake, with no account or client-project access. Inquiries are stored durably in MongoDB. The staff sign-in/dashboard Preview is documented in [admin-api.md](admin-api.md); client-project access remains future work.\n\n## GET /api/services\n\nReturns `categories`, `services`, and `generalService`. Each service includes its ID, description and question definitions. `lib/services.js` is the authoritative service schema; do not duplicate question options in clients. No prices are published.\n\n## POST /api/inquiries\n\nHeaders: `Content-Type: application/json`, `Idempotency-Key: <UUID v4>`. Browsers must use the configured public origin. Generate one key per payload and reuse it for retries of that payload.\n\nExample (replace the request key with a fresh UUID):\n\n```json\n{\n  \"serviceId\": \"not-sure\",\n  \"fullName\": \"Example Visitor\",\n  \"businessName\": \"Example Business\",\n  \"email\": \"visitor@example.com\",\n  \"phone\": \"\",\n  \"contactPreference\": \"email\",\n  \"goal\": \"I want to discuss a website for my business.\",\n  \"availableDays\": [\"Monday\", \"Wednesday\"],\n  \"availableTimes\": \"Afternoons after 2 pm\",\n  \"timezone\": \"America/New_York\",\n  \"answers\": {},\n  \"faxNumber\": \"\"\n}\n```\n\n| Field | Rules |\n|---|---|\n| serviceId | One catalog ID, or `not-sure` |\n| fullName | Required text, maximum 120 characters |\n| businessName | Optional text, maximum 160 |\n| email | Required email address, maximum 254 |\n| phone | Optional for email contact; required for phone/either; maximum 40 |\n| contactPreference | `email`, `phone`, or `either` |\n| goal | Required text, maximum 3,000; do not include sensitive data |\n| availableDays | Array of unique full English weekday names; may be empty |\n| availableTimes | Optional preference text, maximum 300 |\n| timezone | Required recognized timezone, maximum 80 |\n| answers | Object containing only the selected service's question IDs; values are strings, maximum 500 each; required/options/URL/date rules come from the catalog |\n| faxNumber | Honeypot: leave empty |\n\nUnknown top-level fields are rejected. Body limit is 20 KB. Recipient, subject and email content fields are never accepted from clients.\n\n201 returns `{reference, saved: true, notificationStatus, acknowledgmentSent, message}` after the database has accepted the inquiry. Email is attempted afterward. `notificationStatus` is `pending`, `processing`, `sent`, or `failed`. A saved inquiry remains successful even if SMTP is missing or fails. `acknowledgmentSent: false` means the requester email is unconfirmed; it does not indicate that the database save failed. Do not resubmit a saved inquiry just to trigger email.\n\nRepeating the same key and normalized payload returns the same reference across instances/restarts. Notification fields may reflect a newer delivery state; no second email attempt is started. Availability does not reserve a time. See `mongodb-setup.md` for stored fields and recovery limitations.\n\n| Status | Meaning/action |\n|---|---|\n| 400 | Invalid fields/JSON/key; correct errors (`errors` may identify fields) |\n| 403 | Browser origin rejected |\n| 409 | Key reused with changed payload; generate a new key |\n| 413 / 415 | Body too large / unsupported content type |\n| 429 | Rate limited; honor `Retry-After` |\n| 503 | Database/configuration failure before acceptance; preserve entries and retry with the same key |\n\nPOST `/api/nodeEmails` returns 410. No caller-controlled email relay remains.\n\n## API tools\n\nPostman and Thunder Client can call these endpoints using the same JSON and headers. Start with the isolated automated tests using simulated storage and delivery; do not run delivery tests against production without owner approval. Keep environment secrets out of exported collections. The automated Node tests provide executable request/response examples without sending mail or connecting to Atlas.\n\nThis increment supplies this reference and executable tests, not a generated Swagger interface. A later OpenAPI document can drive Swagger UI and Postman imports once the API expands; maintain one contract rather than independently edited copies. Codex can assist with implementation and contract checks, but is not an API runtime, authorization layer or source of truth.\n\n## Importable Postman collection\n\nImport `docs/Soft-Web-Services.postman_collection.json` in Postman. It includes the catalog request, six inquiry examples (each service plus help choosing), and saved sample responses. Saved responses are illustrative; they do not indicate that an inquiry was sent.\n\n1. Import the JSON file and open the collection documentation or a request's saved examples.\n2. To execute requests locally, run `npm ci` then `npm run preview` from the repository. The collection defaults to `http://localhost:5000`; this server is on the machine running the application, not an already deployed website.\n3. Send the catalog GET request first. Inquiry POST requests can send actual emails when SMTP is configured. Without MongoDB they return 503. With MongoDB but no SMTP they save the inquiry and return 201 with notificationStatus failed. Existing automated tests use mocked delivery; the normal preview server does not fake success.\n4. Inquiry requests generate a UUID and reuse it for unchanged payload retries. A changed payload generates a new UUID. Clear the collection variable `inquiryKey` to intentionally submit another identical inquiry.\n5. Do not store SMTP credentials or real customer data in shared collection exports. `baseUrl` can later point to a verified staging deployment.\n\nThe collection is a checked-in developer artifact, not a published Postman workspace. Update its examples whenever the API or catalog changes. A shared OpenAPI contract and Swagger viewer remain a later documentation increment.\n\n\nStaff-only endpoints and setup: [Admin API guide](admin-api.md). Public request contracts above are unchanged.\n"
   },
   "variable": [
     {
@@ -19,6 +19,50 @@
       "key": "lastInquiryPayload",
       "value": "",
       "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "loginCode",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "inquiryId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "inquiryVersion",
+      "value": "0",
+      "type": "string"
+    },
+    {
+      "key": "staffEmail",
+      "value": "employee@example.com"
+    },
+    {
+      "key": "staffVersion",
+      "value": "0"
+    },
+    {
+      "key": "eventId",
+      "value": ""
+    },
+    {
+      "key": "participantId",
+      "value": ""
+    },
+    {
+      "key": "eventStartsAt",
+      "value": ""
+    },
+    {
+      "key": "eventEndsAt",
+      "value": ""
     }
   ],
   "item": [
@@ -1176,6 +1220,519 @@
             }
           ],
           "body": "{\n  \"reference\": \"SWS-EXAMPLE12345678\",\n  \"saved\": true,\n  \"notificationStatus\": \"failed\",\n  \"acknowledgmentSent\": false,\n  \"message\": \"Your inquiry has been saved. We will follow up using your contact preferences. An appointment has not been confirmed.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Staff sign-in and inquiry administration",
+      "description": "Run manually against Preview after setting private variables. Verify-code sets an HttpOnly session cookie; Postman retains it in its cookie jar. No token-copy script is needed. Requesting a code sends a real email, so do not run this folder unattended.",
+      "item": [
+        {
+          "name": "Request staff sign-in code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin-auth/request-code",
+            "description": "Staff Preview only. Use the exact configured sign-in origin and cookie jar. Keep email, code and cookies in local/private variables; do not share their values.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Verify staff sign-in code",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin-auth/verify-code",
+            "description": "Staff Preview only. Use the exact configured sign-in origin and cookie jar. Keep email, code and cookies in local/private variables; do not share their values.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"code\": \"{{loginCode}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Current administrator",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/admin/me",
+            "description": "Staff Preview only. Use the exact configured sign-in origin and cookie jar. Keep email, code and cookies in local/private variables; do not share their values."
+          }
+        },
+        {
+          "name": "List inquiries",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/admin/inquiries?page=1",
+            "description": "Staff Preview only. Use the exact configured sign-in origin and cookie jar. Keep email, code and cookies in local/private variables; do not share their values."
+          }
+        },
+        {
+          "name": "Inquiry detail",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/admin/inquiries/{{inquiryId}}",
+            "description": "Staff Preview only. Use the exact configured sign-in origin and cookie jar. Keep email, code and cookies in local/private variables; do not share their values."
+          }
+        },
+        {
+          "name": "Update inquiry status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/inquiries/{{inquiryId}}/status",
+            "description": "Staff Preview only. Use the exact configured sign-in origin and cookie jar. Keep email, code and cookies in local/private variables; do not share their values.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"status\": \"in-progress\",\n  \"version\": {{inquiryVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Sign out",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin-auth/sign-out",
+            "description": "Staff Preview only. Use the exact configured sign-in origin and cookie jar. Keep email, code and cookies in local/private variables; do not share their values."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Staff team",
+      "description": "Sign in first with the existing staff login requests. Uses the cookie jar; real email codes must be entered manually. See docs/staff-access.md.",
+      "item": [
+        {
+          "name": "My workspace",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/me"
+          }
+        },
+        {
+          "name": "List staff",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/admin/team"
+          }
+        },
+        {
+          "name": "Approve staff invitation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/team",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{staffEmail}}\",\n  \"relationship\": \"contractor\",\n  \"roles\": [\n    \"developer\"\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update staff access",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/admin/team/{{staffEmail}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"relationship\": \"contractor\",\n  \"roles\": [\n    \"developer\",\n    \"product-manager\"\n  ],\n  \"status\": \"active\",\n  \"version\": {{staffVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Jira My Work",
+      "description": "Sign in as approved staff first. Consent must be completed in the same browser session, not just Postman; see docs/jira-my-work.md. Disconnect removes local credentials.",
+      "item": [
+        {
+          "name": "Connection status",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/jira"
+          }
+        },
+        {
+          "name": "Start Jira consent",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/jira/connect",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "My assigned SWS tasks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/jira/tasks"
+          }
+        },
+        {
+          "name": "Disconnect my Jira account",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/jira"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Community events",
+      "description": "Use organizer/member sessions in the cookie jar. Set real future ISO timestamps before creating an event. RSVP is not attendance. See docs/community-events.md.",
+      "item": [
+        {
+          "name": "Public upcoming events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/community/events"
+          }
+        },
+        {
+          "name": "Public calendar download",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/events/calendar.ics"
+          }
+        },
+        {
+          "name": "Member events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/events"
+          }
+        },
+        {
+          "name": "My attendance milestones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/attendance"
+          }
+        },
+        {
+          "name": "RSVP Going",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/events/{{eventId}}/rsvp",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rsvp\": \"going\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Event roster (organizer)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/events/{{eventId}}/participants"
+          }
+        },
+        {
+          "name": "Confirm attendance (organizer)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/events/{{eventId}}/attendance",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{participantId}}\",\n  \"attendance\": \"attended\",\n  \"version\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create event (organizer)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/events",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekly engineering session\",\n  \"description\": \"Discuss and practise together.\",\n  \"startsAt\": \"{{eventStartsAt}}\",\n  \"endsAt\": \"{{eventEndsAt}}\",\n  \"timezone\": \"America/Los_Angeles\",\n  \"visibility\": \"public\",\n  \"meetingUrl\": \"\",\n  \"status\": \"scheduled\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Google Calendar and Meet",
+      "description": "Organizer/admin session required. Consent completes in the same browser session. Calendar creation/sync writes to the connected Google account; run only intentionally, not in unattended collection runs. See docs/google-calendar-meet.md.",
+      "item": [
+        {
+          "name": "Google setup status",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/workspace/google-calendar",
+            "header": []
+          }
+        },
+        {
+          "name": "Start Google consent",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/workspace/google-calendar/connect",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create business calendar",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/workspace/google-calendar/calendar",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Link event and create Meet",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/workspace/google-calendar/events/{{eventId}}",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": 0,\n  \"withMeet\": true\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Disconnect Google",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/workspace/google-calendar",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
         }
       ]
     }
