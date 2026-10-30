@@ -1,3 +1,7 @@
+# Community membership extension
+
+Community Member and Event Organizer roles, nullable employment relationships and events/attendance are described in [community-events.md](community-events.md). Older checkpoints below describe the staff-only baseline; missing relationships remain compatible, explicit null now means no employment relationship.
+
 # Staff access — first increment
 
 Status: implemented for Preview review; production release remains separate. Jira and Google Calendar connections in ChatGPT are not website integrations. This increment does not display live tasks, schedule meetings, or track presence.

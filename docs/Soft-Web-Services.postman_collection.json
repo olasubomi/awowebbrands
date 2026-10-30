@@ -47,6 +47,22 @@
     {
       "key": "staffVersion",
       "value": "0"
+    },
+    {
+      "key": "eventId",
+      "value": ""
+    },
+    {
+      "key": "participantId",
+      "value": ""
+    },
+    {
+      "key": "eventStartsAt",
+      "value": ""
+    },
+    {
+      "key": "eventEndsAt",
+      "value": ""
     }
   ],
   "item": [
@@ -1474,6 +1490,130 @@
               }
             ],
             "url": "{{baseUrl}}/api/workspace/jira"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Community events",
+      "description": "Use organizer/member sessions in the cookie jar. Set real future ISO timestamps before creating an event. RSVP is not attendance. See docs/community-events.md.",
+      "item": [
+        {
+          "name": "Public upcoming events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/community/events"
+          }
+        },
+        {
+          "name": "Public calendar download",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/events/calendar.ics"
+          }
+        },
+        {
+          "name": "Member events",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/events"
+          }
+        },
+        {
+          "name": "My attendance milestones",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/attendance"
+          }
+        },
+        {
+          "name": "RSVP Going",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/events/{{eventId}}/rsvp",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"rsvp\": \"going\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Event roster (organizer)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/events/{{eventId}}/participants"
+          }
+        },
+        {
+          "name": "Confirm attendance (organizer)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/events/{{eventId}}/attendance",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"userId\": \"{{participantId}}\",\n  \"attendance\": \"attended\",\n  \"version\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create event (organizer)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/events",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Weekly engineering session\",\n  \"description\": \"Discuss and practise together.\",\n  \"startsAt\": \"{{eventStartsAt}}\",\n  \"endsAt\": \"{{eventEndsAt}}\",\n  \"timezone\": \"America/Los_Angeles\",\n  \"visibility\": \"public\",\n  \"meetingUrl\": \"\",\n  \"status\": \"scheduled\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
           }
         }
       ]

@@ -77,11 +77,11 @@ test('contractor Developer can sign in but cannot assign roles or access inquiri
   assert.equal(invitation.status, 201); assert.equal((await invitation.json()).member.relationship, 'contractor');
   const cookie = await s.login('contractor@example.com');
   const me = await (await s.request('/api/workspace/me', cookie)).json();
-  assert.equal(me.relationship, 'contractor'); assert.deepEqual(me.roles, ['developer']); assert.deepEqual(me.permissions, ['workspace:read']);
+  assert.equal(me.relationship, 'contractor'); assert.deepEqual(me.roles, ['developer']); assert.deepEqual(me.permissions, ['workspace:read', 'work:read']);
   for (const path of ['/api/admin/team', '/api/admin/inquiries']) assert.equal((await s.request(path, cookie)).status, 403);
-  for (const relationship of ['admin', '', null]) assert.equal((await s.request('/api/admin/team', admin, 'POST', { email: 'bad@example.com', relationship, roles: ['developer'] })).status, 400);
+  for (const relationship of ['admin', '', undefined]) assert.equal((await s.request('/api/admin/team', admin, 'POST', { email: 'bad@example.com', relationship, roles: ['developer'] })).status, 400);
   const base = await s.request('/api/admin/team', admin, 'POST', { email: 'base@example.com', relationship: 'contractor', roles: [] }); assert.equal(base.status, 201);
-  assert.deepEqual((await (await s.request('/api/workspace/me', await s.login('base@example.com'))).json()).permissions, ['workspace:read']);
+  assert.deepEqual((await (await s.request('/api/workspace/me', await s.login('base@example.com'))).json()).permissions, ['workspace:read', 'work:read']);
 });
 test('legacy Employee role retains workspace access without inventing a Developer role or changing stored data', async () => {
   const record = { email: 'legacy@example.com', status: 'active', roles: ['employee', 'product-manager'] };

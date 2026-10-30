@@ -55,6 +55,25 @@ test('MongoDB adapter signs in and atomically consumes codes; inquiry updates pr
   assert.equal((await store.jira.getConnection('one')).encrypted, 'test-ciphertext');
   const disconnectLease = await store.jira.lock('one'); await disconnectLease.disconnect(); await disconnectLease.release();
   assert.equal((await store.jira.getConnection('one')).encrypted, null);
+  const community = store.community;
+  const eventInput = { title: 'Test meeting', description: 'Test only', startsAt: new Date('2026-11-01T16:00:00Z'), endsAt: new Date('2026-11-01T17:00:00Z'), timezone: 'America/Los_Angeles', visibility: 'public', status: 'scheduled', meetingUrl: '' };
+  const event = await community.create(eventInput, 'organizer');
+  await community.rsvp(event._id, 'member', 'member@example.com', 'going');
+  assert.equal((await community.milestones('member', new Date('2026-11-02T06:00:00Z'))).total, 0);
+  const attendanceRace = await Promise.all([
+    community.attendance(event._id, 'member', 'member@example.com', 'attended', 0, 'organizer'),
+    community.attendance(event._id, 'member', 'member@example.com', 'did-not-attend', 0, 'organizer')
+  ]);
+  assert.equal(attendanceRace.filter(Boolean).length, 1);
+  const attendanceRow = await community.response(event._id, 'member');
+  await community.attendance(event._id, 'member', 'member@example.com', 'attended', attendanceRow.version, 'organizer');
+  const milestones = await community.milestones('member', new Date('2026-11-02T06:00:00Z'));
+  assert.equal(milestones.thisMonth, 1); assert.equal(milestones.participatedThisWeek, true); assert.equal(milestones.total, 1);
+  // Midnight Monday after the DST change starts a new reporting week.
+  assert.equal((await community.milestones('member', new Date('2026-11-02T08:00:00Z'))).participatedThisWeek, false);
+  assert.equal((await community.milestones('other-member', new Date('2026-11-02T08:00:00Z'))).total, 0);
+  await community.update(event._id, { ...eventInput, status: 'cancelled' }, 0, 'organizer');
+  assert.equal((await community.milestones('member', new Date('2026-11-02T08:00:00Z'))).total, 0);
   const other = createMongoStore(env);
   t.after(async () => { await store.close(); await other.close(); });
   const a = await store.adminLimit('same-address', 1, 600, Date.now());
