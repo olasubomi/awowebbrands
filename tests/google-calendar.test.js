@@ -3,7 +3,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { randomBytes, randomUUID } = require('node:crypto');
 const { googleCalendarConfig, createGoogleCalendarService } = require('../lib/google-calendar-service');
-function fixture() {
+function fixture(overrides = {}) {
   const config = googleCalendarConfig({ SWS_GOOGLE_CALENDAR_ENABLED: 'true', SWS_GOOGLE_CALENDAR_CLIENT_ID: 'client', SWS_GOOGLE_CALENDAR_CLIENT_SECRET: 'private-secret', SWS_GOOGLE_CALENDAR_ENCRYPTION_KEY: randomBytes(32).toString('base64') }, 'https://sws.example.com');
   const states = new Map(), connections = new Map(), held = new Set(), remote = new Map(), calls = [];
   let meetPending = false, uncertain = false;
@@ -15,6 +15,7 @@ function fixture() {
   };
   const request = async (url, options) => {
     calls.push({ url, ...options });
+    if (overrides.request) { const response = await overrides.request(url, options); if (response) return response; }
     if (url === 'https://oauth2.googleapis.com/token') return new Response(JSON.stringify({ access_token: 'private-access', refresh_token: 'private-refresh', expires_in: 3600 }));
     if (url.includes('/userinfo')) return new Response(JSON.stringify({ sub: 'google-owner', email: 'organizer@example.com', email_verified: true }));
     if (url.endsWith('/calendars') && options.method === 'POST') { if (uncertain) throw Error('timeout'); return new Response(JSON.stringify({ id: 'sws-calendar', conferenceProperties: { allowedConferenceSolutionTypes: ['hangoutsMeet'] } })); }
@@ -66,4 +67,21 @@ test('event conflict after Google save preserves remote event and retry reuses i
   const f = fixture(); await f.connect(); await f.service.createCalendar('u'); const update = f.data.update; f.data.update = async () => null;
   await assert.rejects(f.service.sync('u', f.data, f.event._id, 0, true), { code: 'GOOGLE_EVENT_CHANGED' }); assert.equal(f.remote.size, 1);
   f.data.update = update; await f.service.sync('u', f.data, f.event._id, 0, true); assert.equal(f.remote.size, 1); assert.equal(f.calls.filter(c => c.url.includes('/events?')).length, 1);
+});
+
+test('OAuth failures distinguish client credentials, rejected codes and missing tokens without exposing provider details', async () => {
+  for (const [oauth, code] of [['invalid_client', 'GOOGLE_CLIENT'], ['invalid_grant', 'GOOGLE_GRANT'], ['redirect_uri_mismatch', 'GOOGLE_REDIRECT'], ['__proto__', 'GOOGLE_RECONNECT'], ['unknown', 'GOOGLE_RECONNECT']]) {
+    const f = fixture({ request: async url => url.endsWith('/token') ? new Response(JSON.stringify({ error: oauth, error_description: 'private-secret private-code private-token' }), { status: 400 }) : null });
+    await assert.rejects(f.connect(), e => { assert.equal(e.code, code); assert.equal(e.stage, 'token'); assert.ok(!JSON.stringify(e).includes('private-')); return true; });
+    assert.equal((await f.service.status('u')).connected, false);
+    assert.equal(f.held.size, 0);
+  }
+  const missing = fixture({ request: async url => url.endsWith('/token') ? new Response(JSON.stringify({ access_token: 'private-access', expires_in: 3600 })) : null });
+  await assert.rejects(missing.connect(), { code: 'GOOGLE_TOKEN_RESPONSE', stage: 'token' });
+});
+test('callback errors identify profile and database stages; unexpected exception details stay private', async () => {
+  const profile = fixture({ request: async url => url.includes('/userinfo') ? new Response(JSON.stringify({ sub: 'owner', email: 'owner@example.com', email_verified: false })) : null });
+  await assert.rejects(profile.connect(), { code: 'GOOGLE_PERMISSION', stage: 'profile' });
+  const database = fixture(); database.store.consumeState = async () => { throw Error('private database credentials'); };
+  await assert.rejects(database.connect(), e => { assert.equal(e.code, 'GOOGLE_UNAVAILABLE'); assert.equal(e.stage, 'state'); assert.ok(!JSON.stringify(e).includes('credentials')); return true; });
 });

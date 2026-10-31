@@ -132,7 +132,22 @@
   document.getElementById('google-connect').addEventListener('click', () => action(async () => { const d = await request('/api/workspace/google-calendar/connect', 'POST', {}), u = new URL(d.url); if (u.origin !== 'https://accounts.google.com') throw Error('Invalid Google connection address.'); location.assign(u.href); }));
   document.getElementById('google-create-calendar').addEventListener('click', () => action(async () => { await request('/api/workspace/google-calendar/calendar', 'POST', {}); await googleStatus(); await load(); notify('Your SWS Google calendar is ready. Link an event using its Google Calendar button.'); }));
   document.getElementById('google-disconnect').addEventListener('click', () => action(async () => { if (!window.confirm('Disconnect this website from your Google account? Existing Google events will remain.')) return; await request('/api/workspace/google-calendar', 'DELETE', {}); await googleStatus(); await load(); notify('Google connection removed from this website.'); }));
-  const googleResult = new URLSearchParams(location.search).get('google');
+  const googleQuery = new URLSearchParams(location.search), googleResult = googleQuery.get('google');
+  const googleFailures = {
+    GOOGLE_DENIED: 'Google permission was declined. Connect again and allow the requested Calendar access.',
+    GOOGLE_CALLBACK: 'Google returned an incomplete connection response. Start a new connection from this page.',
+    GOOGLE_CLIENT: 'Google rejected the OAuth client credentials. An administrator must check that the Vercel client ID and secret belong to the same Google Web application client.',
+    GOOGLE_GRANT: 'Google rejected the authorization code. Start a fresh connection. If this repeats, an administrator must check the callback URI and OAuth client settings.',
+    GOOGLE_REDIRECT: 'The Google callback URI does not match. An administrator must register the exact Preview callback URI on the Google OAuth client.',
+    GOOGLE_TOKEN_RESPONSE: 'Google did not return the credentials needed for a lasting connection. Reconnect and approve the requested access.',
+    GOOGLE_RECONNECT: 'Google authorization could not be completed. Start a fresh connection.',
+    GOOGLE_PERMISSION: 'Google did not allow access or did not provide a verified email. Check that this Google account is a listed test user and approve the requested permissions.',
+    GOOGLE_STATE: 'This connection request expired or belongs to another sign-in. Start again in the same browser tab and stay signed in.',
+    GOOGLE_BUSY: 'Another Google connection request is in progress. Wait a minute, then connect again.',
+    GOOGLE_RATE_LIMIT: 'Google is temporarily limiting requests. Wait a minute, then connect again.',
+    GOOGLE_UNAVAILABLE: 'The Google connection could not be completed. Retry once; if it repeats, share the support reference with us.'
+  };
+  const googleReference = /^[a-f0-9]{12}$/.test(googleQuery.get('reference') || '') ? ' Support reference: SWS-GOOGLE / ' + googleQuery.get('reference') + '.' : '';
   if (googleResult) history.replaceState(null, '', location.pathname);
   action(async () => {
     const response = await fetch('/api/workspace/me', { credentials: 'same-origin' });
@@ -141,6 +156,6 @@
     if (me) document.getElementById('member-login').textContent = me.email;
     try { await googleStatus(); } catch (e) { notify(e.message); }
     await load(); await summary();
-    if (googleResult) notify(googleResult === 'connected' ? 'Google account connected. Create your SWS business calendar next if needed.' : 'Google connection was not completed. Try connecting again.');
+    if (googleResult) notify(googleResult === 'connected' ? 'Google account connected. Create your SWS business calendar next if needed.' : (Object.hasOwn(googleFailures, googleQuery.get('reason')) ? googleFailures[googleQuery.get('reason')] : googleFailures.GOOGLE_UNAVAILABLE) + googleReference);
   });
 })();

@@ -110,12 +110,21 @@ test('event errors identify individual fields; optional empty or omitted meeting
 
 test('Google consent route requires organizer, exact Origin, and server-derived user/session identity', async t => {
   const states = [];
-  const f = await fixture(t, { origin: 'https://sws.example.com', env: { SWS_GOOGLE_CALENDAR_ENABLED: 'true', SWS_GOOGLE_CALENDAR_CLIENT_ID: 'client', SWS_GOOGLE_CALENDAR_CLIENT_SECRET: 'secret', SWS_GOOGLE_CALENDAR_ENCRYPTION_KEY: randomBytes(32).toString('base64') }, googleStore: { putState: async s => states.push(s), getConnection: async () => null } });
+  const googleStore = { putState: async s => states.push(s), getConnection: async () => null };
+  const f = await fixture(t, { origin: 'https://sws.example.com', env: { SWS_GOOGLE_CALENDAR_ENABLED: 'true', SWS_GOOGLE_CALENDAR_CLIENT_ID: 'client', SWS_GOOGLE_CALENDAR_CLIENT_SECRET: 'secret', SWS_GOOGLE_CALENDAR_ENCRYPTION_KEY: randomBytes(32).toString('base64') }, googleStore });
   const organizer = await f.login('organizer@example.com'), member = await f.login('member@example.com');
   assert.equal((await f.request('/api/workspace/google-calendar/connect', member, 'POST', {})).status, 403);
   assert.equal((await f.request('/api/workspace/google-calendar/connect', organizer, 'POST', {}, 'https://evil.example')).status, 403);
   const result = await f.request('/api/workspace/google-calendar/connect', organizer, 'POST', { userId: 'forged' }); assert.equal(result.status, 200);
   const data = await result.json(); assert.match(data.url, /^https:\/\/accounts.google.com\//); assert.equal(states.length, 1); assert.notEqual(states[0].userId, 'forged');
   assert.equal(states[0].userId, (await (await f.request('/api/workspace/me', organizer)).json()).id);
-  assert.equal((await f.request('/api/workspace/google-calendar/callback?state=bad&code=bad', organizer)).headers.get('location'), '/workspace/events?google=failed');
+  const malformed = new URL((await f.request('/api/workspace/google-calendar/callback?state=bad&code=bad', organizer)).headers.get('location'), 'https://sws.example.com');
+  assert.equal(malformed.searchParams.get('reason'), 'GOOGLE_CALLBACK'); assert.match(malformed.searchParams.get('reference'), /^[a-f0-9]{12}$/);
+  const denied = new URL((await f.request('/api/workspace/google-calendar/callback?error=access_denied&error_description=private-provider-details', organizer)).headers.get('location'), 'https://sws.example.com');
+  assert.equal(denied.searchParams.get('reason'), 'GOOGLE_DENIED'); assert.ok(!denied.href.includes('private-provider-details'));
+  googleStore.consumeState = async () => { const e = Error('private token'); e.code = 'unsafe-provider-code'; throw e; };
+  const state = new URL(data.url).searchParams.get('state');
+  const failed = new URL((await f.request('/api/workspace/google-calendar/callback?state=' + state + '&code=private-authorization-code', organizer)).headers.get('location'), 'https://sws.example.com');
+  assert.equal(failed.searchParams.get('reason'), 'GOOGLE_UNAVAILABLE'); assert.ok(!failed.href.includes('private'));
+
 });

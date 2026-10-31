@@ -78,3 +78,16 @@ Before production: complete real consent, business-calendar creation, Calendar/M
 References: [Web OAuth](https://developers.google.com/identity/protocols/oauth2/web-server), [Calendar creation](https://developers.google.com/workspace/calendar/api/v3/reference/calendars/insert), [event/conference creation](https://developers.google.com/workspace/calendar/api/v3/reference/events/insert).
 
 Local verification checkpoint: 58 tests passed and one optional real-Mongo test skipped, on Node 24. Field-specific HTTP validation includes blank/omitted meeting links, past starts, end-before-start, invalid zones and HTTP links. JavaScript syntax and generated HTML ID/label checks passed. Vercel Preview remains the Node 22 bundle check. Browser visual verification and live Google/Atlas checks are pending.
+
+### Connection troubleshooting
+
+A failed Google callback now shows a specific reason and a `SWS-GOOGLE` support reference in the page message and fixed notification. Administrators can match the reference to the `sws_google_callback_failed` runtime log. That log contains only an allowlisted reason, processing stage, and random reference; it excludes email addresses, OAuth codes/state, credentials, token values, and provider response bodies.
+
+- `GOOGLE_CLIENT`: confirm the Preview client ID and secret belong to the same Google **Web application** client.
+- `GOOGLE_GRANT` or `GOOGLE_STATE`: start a new connection in the same signed-in browser tab; do not reuse or refresh an old callback URL.
+- `GOOGLE_REDIRECT`: register the exact Preview callback URI on that OAuth client.
+- `GOOGLE_DENIED` or `GOOGLE_PERMISSION`: check the selected Google test user and requested consent permissions.
+- `GOOGLE_TOKEN_RESPONSE`: reconnect and grant consent; Google must issue offline credentials.
+- `GOOGLE_UNAVAILABLE`: use the reference and log stage to distinguish provider/network failures from state or connection storage failures.
+
+These classifications do not prove the cause of earlier generic failures; a fresh attempt is required to capture it. Production remains disabled until live OAuth, Calendar creation, and Meet synchronization are verified.
