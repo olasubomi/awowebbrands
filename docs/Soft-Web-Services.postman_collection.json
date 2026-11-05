@@ -63,6 +63,14 @@
     {
       "key": "eventEndsAt",
       "value": ""
+    },
+    {
+      "key": "pollId",
+      "value": ""
+    },
+    {
+      "key": "pollVersion",
+      "value": "0"
     }
   ],
   "item": [
@@ -1733,6 +1741,298 @@
               }
             }
           }
+        }
+      ]
+    },
+    {
+      "name": "Scheduling polls",
+      "description": "Session cookie required for management; guest GET establishes a browser cookie for voting. Refresh the poll revision before every write. Guest names/votes are public unless an administrator enables anonymous mode. See docs/scheduling-polls.md.",
+      "item": [
+        {
+          "name": "Create meeting poll (signed-in member)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/scheduling",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Find our engineering meeting time\",\n  \"description\": \"Choose your availability\",\n  \"timezone\": \"America/Los_Angeles\",\n  \"deadline\": \"{{pollDeadline}}\",\n  \"slots\": [\n    {\n      \"startsAt\": \"{{pollStart1}}\",\n      \"endsAt\": \"{{pollEnd1}}\"\n    },\n    {\n      \"startsAt\": \"{{pollStart2}}\",\n      \"endsAt\": \"{{pollEnd2}}\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 201) { const p = pm.response.json().poll; pm.collectionVariables.set(\"pollId\", p.id); pm.collectionVariables.set(\"pollVersion\", p.version); }"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const day = 86400000, now = Date.now();",
+                  "for (const [key, days] of Object.entries({pollDeadline:1,pollStart1:2,pollEnd1:2.04,pollStart2:3,pollEnd2:3.04})) pm.variables.set(key, new Date(now + days * day).toISOString());"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "List my polls",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/scheduling"
+          }
+        },
+        {
+          "name": "Organizer poll results",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/workspace/scheduling/{{pollId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().poll) pm.collectionVariables.set(\"pollVersion\", pm.response.json().poll.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Open participant poll (sets guest cookie)",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/scheduling/polls/{{pollId}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().poll) pm.collectionVariables.set(\"pollVersion\", pm.response.json().poll.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Save my availability (no login)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/scheduling/polls/{{pollId}}/response",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Example participant\",\n  \"votes\": [\n    \"yes\",\n    \"maybe\"\n  ],\n  \"version\": {{pollVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().poll) pm.collectionVariables.set(\"pollVersion\", pm.response.json().poll.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Withdraw my availability",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/scheduling/polls/{{pollId}}/response",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{pollVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().poll) pm.collectionVariables.set(\"pollVersion\", pm.response.json().poll.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Admin: hide participant details",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/scheduling/{{pollId}}/privacy",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"anonymous\": true,\n  \"version\": {{pollVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().poll) pm.collectionVariables.set(\"pollVersion\", pm.response.json().poll.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Confirm a final time",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/scheduling/{{pollId}}/decision",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"finalize\",\n  \"slotId\": \"1\",\n  \"meetingUrl\": \"\",\n  \"version\": {{pollVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().poll) pm.collectionVariables.set(\"pollVersion\", pm.response.json().poll.version);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Download confirmed calendar file",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/scheduling/polls/{{pollId}}/calendar.ics"
+          }
+        },
+        {
+          "name": "Cancel poll",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/scheduling/{{pollId}}/decision",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"action\": \"cancel\",\n  \"version\": {{pollVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200 && pm.response.json().poll) pm.collectionVariables.set(\"pollVersion\", pm.response.json().poll.version);"
+                ]
+              }
+            }
+          ]
         }
       ]
     }

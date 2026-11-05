@@ -82,3 +82,7 @@ A contractor Developer has no automatic access to projects, customer data, GitHu
 Contractor extension verification: 38 tests passed on the available Node 24 runtime, one real-Mongo test skipped. Includes a contractor Developer login, denial of customer inquiry/team APIs, relationship validation, basic staff without extra roles, and unchanged legacy records. The local Node 22 download was unavailable (registry returned 403); the Preview build remains the Node 22 bundle check. A fresh browser layout check for these controls has not been run in this environment.
 
 Jira My Work is now implemented behind separate configuration; see [jira-my-work.md](jira-my-work.md) for status, API, setup and remaining live validation. Earlier references to Jira as the next increment describe the previous checkpoint.
+
+## Scheduling and profile
+
+Approved signed-in users can organize their own meeting polls when scheduling is enabled. The assignable Scheduling Organizer role grants own-poll access only. Admins manage all polls and control anonymity. See [scheduling-polls.md](scheduling-polls.md) for the permission matrix, profile page, schema and API. `/workspace/profile` shows account roles; `/admin/team` remains the admin role-assignment page. Guest poll participants do not need an account.

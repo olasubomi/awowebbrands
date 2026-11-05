@@ -2,7 +2,7 @@
 (() => {
   const message = document.getElementById('staff-message'), list = document.getElementById('team-list');
   let cursor = '', next = null, busy = false;
-  const labels = { 'community-member': 'Community Member', 'event-organizer': 'Event Organizer', developer: 'Developer', 'product-manager': 'Product Manager', admin: 'Administrator' };
+  const labels = { 'community-member': 'Community Member', 'event-organizer': 'Event Organizer', 'scheduling-organizer': 'Scheduling Organizer', developer: 'Developer', 'product-manager': 'Product Manager', admin: 'Administrator' };
   function node(tag, text, parent) { const el = document.createElement(tag); if (text) el.textContent = text; if (parent) parent.append(el); return el; }
   function notify(text) { message.textContent = text; }
   async function request(path, method = 'GET', body) {
