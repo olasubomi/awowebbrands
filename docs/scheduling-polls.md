@@ -28,6 +28,8 @@ Every approved active account receives `scheduling:manage:own` while scheduling 
 
 1. Homepage member sign-in → workspace/profile → Create and manage meeting polls.
 2. Organizer supplies a title, optional description, 2–20 start/end options, and response deadline. Times are entered in the browser's device time zone and stored as UTC instants with an IANA display zone.
+Time entry supports separate date and directly editable 24-hour time fields, including the response deadline. Type `9`, `930`, `0930`, or `09:30`; valid values normalize to `HH:MM` on blur. Focusing a time field selects its contents for replacement. Each option has **Duplicate option**, which copies both dates/times into a new independent row immediately below it, and **Remove option**. A missing end date initially follows the chosen start date; it can be changed for overnight meetings. Duplicates count toward the 20-option limit and must be adjusted before saving because exact duplicate options remain invalid.
+
 3. Save → copy `/schedule/{pollId}`. Anyone with this unguessable 256-bit capability link can view and participate. No public poll directory exists.
 4. Participant enters a display name and Yes/Maybe/No for every option. No email or account is required. The UI clearly discloses current visibility before submission.
 5. Organizer reviews availability and explicitly confirms one future option, optionally with an HTTPS meeting link. Voting closes; the same link shows the confirmed time and an ICS download.

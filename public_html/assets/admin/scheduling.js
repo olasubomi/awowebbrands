@@ -19,7 +19,7 @@
       const text = Object.values(e.errors || {}).join(' ') || e.message; notify(text);
       if (form) {
         const message = $(form + '-errors'); message.textContent = text; message.hidden = false;
-        const fields = { title: 'poll-title', description: 'poll-description', deadline: 'poll-deadline', slots: 'slot-inputs', name: 'participant-name', votes: 'response-options' };
+        const fields = { title: 'poll-title', description: 'poll-description', deadline: 'deadline-inputs', slots: 'slot-inputs', name: 'participant-name', votes: 'response-options' };
         let first;
         for (const [key, value] of Object.entries(e.errors || {})) {
           const input = $(fields[key]); if (!input) continue;
@@ -32,15 +32,53 @@
       }
     } finally { document.querySelectorAll('button').forEach(b => { b.disabled = false; }); }
   }
-  function addSlot() {
+  function timeText(value) {
+    const raw = value.trim(), compact = /^(\d{1,4})$/.test(raw), colon = /^(\d{1,2}):(\d{2})$/.exec(raw);
+    let hour, minute;
+    if (colon) { hour = Number(colon[1]); minute = Number(colon[2]); }
+    else if (compact) { hour = Number(raw.length <= 2 ? raw : raw.slice(0, -2)); minute = raw.length <= 2 ? 0 : Number(raw.slice(-2)); }
+    else return null;
+    if (hour > 23 || minute > 59) return null;
+    return String(hour).padStart(2, '0') + ':' + String(minute).padStart(2, '0');
+  }
+  function dateTimeFields(parent, prefix, title, values = {}) {
+    const group = node('div', undefined, parent); group.className = 'slot-boundary';
+    for (const [kind, labelText] of [['date', title + ' date'], ['time', title + ' time (24-hour)']]) {
+      const label = node('label', labelText, group), input = node('input', undefined, label);
+      input.id = prefix + '-' + kind; input.dataset.part = kind; input.required = true; label.htmlFor = input.id; input.value = values[kind] || '';
+      if (kind === 'date') input.type = 'date';
+      else {
+        input.type = 'text'; input.inputMode = 'numeric'; input.maxLength = 5; input.placeholder = '09:30'; input.autocomplete = 'off';
+        input.title = '24-hour time: type 9, 930, or 09:30. Afternoon example: 1430.';
+        let selectOnPointerUp = false;
+        input.addEventListener('focus', () => { input.select(); selectOnPointerUp = true; });
+        input.addEventListener('pointerup', () => { if (selectOnPointerUp) { input.select(); selectOnPointerUp = false; } });
+        input.addEventListener('blur', () => { selectOnPointerUp = false; const normalized = timeText(input.value); if (normalized) input.value = normalized; });
+      }
+    }
+    return group;
+  }
+  const rawDateTime = group => Object.fromEntries(['date', 'time'].map(part => [part, group.querySelector('[data-part=' + part + ']').value]));
+  function inputInstant(group, key, title) {
+    const value = rawDateTime(group), time = timeText(value.time);
+    if (!time) { const e = Error(title + ': enter a valid 24-hour time, such as 9, 930, or 14:30.'); e.errors = { [key]: e.message }; throw e; }
+    return instant(value.date + 'T' + time, key);
+  }
+  function addSlot(source) {
     if ($('slot-inputs').children.length >= 20) return notify('You can propose up to 20 times.');
     const n = ++slotNumber, row = node('div', undefined, $('slot-inputs')); row.className = 'slot-input-row';
-    for (const [key, text] of [['start', 'Start'], ['end', 'End']]) {
-      const label = node('label', text, row), input = node('input', undefined, label);
-      input.id = 'slot-' + n + '-' + key; input.dataset.kind = key; input.type = 'datetime-local'; input.required = true; label.htmlFor = input.id;
+    for (const [key, title] of [['start', 'Start'], ['end', 'End']]) {
+      const previous = source?.querySelector('[data-kind=' + key + ']');
+      const group = dateTimeFields(row, 'slot-' + n + '-' + key, title, previous ? rawDateTime(previous) : {}); group.dataset.kind = key;
     }
-    const remove = node('button', 'Remove option', row); remove.type = 'button'; remove.className = 'secondary';
+    const controls = node('div', undefined, row); controls.className = 'slot-actions';
+    const duplicate = node('button', 'Duplicate option', controls); duplicate.type = 'button'; duplicate.className = 'secondary';
+    duplicate.addEventListener('click', () => addSlot(row));
+    const remove = node('button', 'Remove option', controls); remove.type = 'button'; remove.className = 'secondary';
     remove.addEventListener('click', () => { if ($('slot-inputs').children.length <= 2) notify('Keep at least two proposed times.'); else row.remove(); });
+    const startDate = row.querySelector('[data-kind=start] [data-part=date]'), endDate = row.querySelector('[data-kind=end] [data-part=date]');
+    startDate.addEventListener('change', () => { if (!endDate.value) endDate.value = startDate.value; });
+    if (source) { source.after(row); startDate.focus(); row.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); notify('Time option duplicated. Adjust its date or time before saving.'); }
   }
   function instant(value, key) {
     const d = new Date(value);
@@ -103,10 +141,10 @@
     next = d.next; $('more-polls').hidden = !next;
   }
   $('new-poll').addEventListener('click', () => { $('create-form').hidden = false; $('poll-title').focus(); });
-  $('close-create').addEventListener('click', () => { $('create-form').hidden = true; }); $('add-slot').addEventListener('click', addSlot);
+  $('close-create').addEventListener('click', () => { $('create-form').hidden = true; }); $('add-slot').addEventListener('click', () => addSlot());
   $('create-form').addEventListener('submit', e => { e.preventDefault(); action(async () => {
-    const slots = [...$('slot-inputs').children].map(row => ({ startsAt: instant(row.querySelector('[data-kind=start]').value, 'slots'), endsAt: instant(row.querySelector('[data-kind=end]').value, 'slots') }));
-    const d = await request('/api/workspace/scheduling', 'POST', { title: $('poll-title').value, description: $('poll-description').value, timezone: deviceZone, deadline: instant($('poll-deadline').value, 'deadline'), slots });
+    const slots = [...$('slot-inputs').children].map(row => ({ startsAt: inputInstant(row.querySelector('[data-kind=start]'), 'slots', 'Start time'), endsAt: inputInstant(row.querySelector('[data-kind=end]'), 'slots', 'End time') }));
+    const d = await request('/api/workspace/scheduling', 'POST', { title: $('poll-title').value, description: $('poll-description').value, timezone: deviceZone, deadline: inputInstant($('deadline-inputs'), 'deadline', 'Response deadline'), slots });
     location.assign('/workspace/scheduling/' + d.poll.id);
   }, 'create'); });
   $('refresh-poll').addEventListener('click', () => action(async () => { await load(true); notify('Results refreshed. Unsaved selections are retained.'); }));
@@ -128,6 +166,6 @@
   $('more-polls').addEventListener('click', () => action(() => list(next)));
   action(async () => {
     if (manage) { const me = await request('/api/workspace/me'); privacyAdmin = me.permissions.includes('scheduling:privacy'); }
-    if (id) await load(); else if (manage) { $('create-section').hidden = false; $('list-section').hidden = false; $('entry-zone').textContent = 'Enter times in your device time zone: ' + deviceZone + '. Participants can view them in their own zone. For repeated DST times, use the first occurrence.'; addSlot(); addSlot(); await list(); }
+    if (id) await load(); else if (manage) { $('create-section').hidden = false; $('list-section').hidden = false; $('entry-zone').textContent = 'Enter times in your device time zone: ' + deviceZone + '. Participants can view them in their own zone. For repeated DST times, use the first occurrence.'; dateTimeFields($('deadline-inputs'), 'poll-deadline', 'Response deadline'); addSlot(); addSlot(); await list(); }
   });
 })();
