@@ -1746,8 +1746,167 @@
     },
     {
       "name": "Scheduling polls",
-      "description": "Session cookie required for management; guest GET establishes a browser cookie for voting. Refresh the poll revision before every write. Guest names/votes are public unless an administrator enables anonymous mode. See docs/scheduling-polls.md.",
+      "description": "Session cookie required for management; guest GET establishes a browser cookie for voting. Refresh the poll revision before every write. Guest names/votes are public unless an administrator enables anonymous mode. See docs/scheduling-polls.md. Drafts are private until published. Published time edits with existing votes require resetResponses=true and clear availability; details-only edits preserve responses.",
       "item": [
+        {
+          "name": "Save private incomplete draft",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/scheduling/drafts",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"draftInput\": {\n    \"title\": \"Draft meeting\",\n    \"description\": \"Still planning\",\n    \"timezone\": \"America/Los_Angeles\",\n    \"deadline\": {\n      \"date\": \"\",\n      \"time\": \"\"\n    },\n    \"slots\": [\n      {\n        \"start\": {\n          \"date\": \"\",\n          \"time\": \"\"\n        },\n        \"end\": {\n          \"date\": \"\",\n          \"time\": \"\"\n        }\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.json().poll) { const p = pm.response.json().poll; pm.collectionVariables.set(\"pollId\", p.id); pm.collectionVariables.set(\"pollVersion\", p.version); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Update private draft",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/scheduling/{{pollId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"version\": {{pollVersion}},\n  \"draftInput\": {\n    \"title\": \"Draft meeting\",\n    \"description\": \"Still planning\",\n    \"timezone\": \"America/Los_Angeles\",\n    \"deadline\": {\n      \"date\": \"\",\n      \"time\": \"\"\n    },\n    \"slots\": [\n      {\n        \"start\": {\n          \"date\": \"\",\n          \"time\": \"\"\n        },\n        \"end\": {\n          \"date\": \"\",\n          \"time\": \"\"\n        }\n      }\n    ]\n  }\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.json().poll) { const p = pm.response.json().poll; pm.collectionVariables.set(\"pollId\", p.id); pm.collectionVariables.set(\"pollVersion\", p.version); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Publish completed draft",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/scheduling/{{pollId}}/publish",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Published meeting\",\n  \"description\": \"Choose availability\",\n  \"timezone\": \"America/Los_Angeles\",\n  \"deadline\": \"{{pollDeadline}}\",\n  \"slots\": [\n    {\n      \"startsAt\": \"{{pollStart1}}\",\n      \"endsAt\": \"{{pollEnd1}}\"\n    },\n    {\n      \"startsAt\": \"{{pollStart2}}\",\n      \"endsAt\": \"{{pollEnd2}}\"\n    }\n  ],\n  \"version\": {{pollVersion}}\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.json().poll) { const p = pm.response.json().poll; pm.collectionVariables.set(\"pollId\", p.id); pm.collectionVariables.set(\"pollVersion\", p.version); }"
+                ]
+              }
+            },
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const day = 86400000, now = Date.now();",
+                  "for (const [key, days] of Object.entries({pollDeadline:1,pollStart1:2,pollEnd1:2.04,pollStart2:3,pollEnd2:3.04})) pm.variables.set(key, new Date(now + days * day).toISOString());"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Edit published poll (refresh first; preserve existing time values for details only)",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Origin",
+                "value": "{{baseUrl}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/workspace/scheduling/{{pollId}}",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Published meeting\",\n  \"description\": \"Choose availability\",\n  \"timezone\": \"America/Los_Angeles\",\n  \"deadline\": \"{{pollDeadline}}\",\n  \"slots\": [\n    {\n      \"startsAt\": \"{{pollStart1}}\",\n      \"endsAt\": \"{{pollEnd1}}\"\n    },\n    {\n      \"startsAt\": \"{{pollStart2}}\",\n      \"endsAt\": \"{{pollEnd2}}\"\n    }\n  ],\n  \"version\": {{pollVersion}},\n  \"resetResponses\": false\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "Use the exact existing options and deadline for a details-only edit. Changing options with responses returns 409 until you explicitly set resetResponses=true; that clears all availability. Do not copy dates from another poll."
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code >= 200 && pm.response.code < 300 && pm.response.json().poll) { const p = pm.response.json().poll; pm.collectionVariables.set(\"pollId\", p.id); pm.collectionVariables.set(\"pollVersion\", p.version); }"
+                ]
+              }
+            }
+          ]
+        },
         {
           "name": "Create meeting poll (signed-in member)",
           "request": {

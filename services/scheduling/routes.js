@@ -1,6 +1,6 @@
 'use strict';
 const express = require('express');
-const { tokenPattern, token, digest, owns, canCreate, checkPoll, checkBallot, pollView, calendar } = require('./model');
+const { tokenPattern, token, digest, owns, canCreate, checkPoll, checkDraft, sameSlots, checkBallot, pollView, calendar } = require('./model');
 const { schedulingPage } = require('./pages');
 function registerScheduling(app, { env, store, origin, sameOrigin, privateHeaders }) {
   const enabled = env.SWS_SCHEDULING_ENABLED === 'true' && env.SWS_STAFF_ENABLED === 'true' && !!origin;
@@ -22,13 +22,52 @@ function registerScheduling(app, { env, store, origin, sameOrigin, privateHeader
     const checked = checkPoll(req.body); if (checked.errors) return res.status(400).json({ message: 'Check the highlighted poll fields.', errors: checked.errors });
     const p = await data.create(checked.value, req.admin.id); res.status(201).json({ poll: pollView(p, null, true), shareUrl: origin + '/schedule/' + p._id });
   }));
+  app.post('/api/workspace/scheduling/drafts', sameOrigin, parse, limited('create', 10), safe(async (req, res) => {
+    if (!req.body || Object.keys(req.body).some(k => k !== 'draftInput')) return res.status(400).json({ message: 'Provide the draft input only.' });
+    const checked = checkDraft(req.body.draftInput);
+    if (checked.errors) return res.status(400).json({ message: 'Check your draft.', errors: checked.errors });
+    const p = await data.create(checked.value, req.admin.id, 'draft');
+    res.status(201).json({ poll: pollView(p, null, true) });
+  }));
   async function load(req, res, organizer) {
     if (!tokenPattern.test(req.params.id)) { res.status(404).json({ message: 'Poll not found.' }); return null; }
     const p = await data.get(req.params.id);
-    if (!p || (organizer && !owns(req.staff, req.admin.id, p))) { res.status(404).json({ message: 'Poll not found.' }); return null; }
+    if (!p || (!organizer && p.status === 'draft') || (organizer && !owns(req.staff, req.admin.id, p))) { res.status(404).json({ message: 'Poll not found.' }); return null; }
     return p;
   }
-  app.get('/api/workspace/scheduling/:id', limited('read', 90), safe(async (req, res) => { const p = await load(req, res, true); if (p) res.json({ poll: pollView(p, null, true), shareUrl: origin + '/schedule/' + p._id }); }));
+  app.get('/api/workspace/scheduling/:id', limited('read', 90), safe(async (req, res) => { const p = await load(req, res, true); if (p) res.json({ poll: pollView(p, null, true), ...(p.status === 'draft' ? {} : { shareUrl: origin + '/schedule/' + p._id }) }); }));
+  const conflict = res => res.status(409).json({ message: 'This poll changed. Refresh the results and reopen the editor before saving.' });
+  app.patch('/api/workspace/scheduling/:id', sameOrigin, parse, limited('edit', 20), safe(async (req, res) => {
+    const p = await load(req, res, true); if (!p) return;
+    const b = req.body;
+    if (!b || !Number.isSafeInteger(b.version) || b.version < 0 || p.status === 'cancelled') return res.status(400).json({ message: 'Use a current poll revision. Cancelled polls cannot be edited.' });
+    if (p.version !== b.version) return conflict(res);
+    if (p.status === 'draft') {
+      if (Object.keys(b).some(k => !['version', 'draftInput'].includes(k))) return res.status(400).json({ message: 'Save the draft input before publishing.' });
+      const checked = checkDraft(b.draftInput); if (checked.errors) return res.status(400).json({ message: 'Check your draft.', errors: checked.errors });
+      const saved = await data.change(p._id, b.version, checked.value, 'draft-saved', req.admin.id);
+      if (!saved) return conflict(res); return res.json({ poll: pollView(saved, null, true) });
+    }
+    const { version, resetResponses, ...input } = b;
+    if (resetResponses !== undefined && typeof resetResponses !== 'boolean') return res.status(400).json({ message: 'Confirm response reset using true or false.' });
+    const checked = checkPoll(input, Date.now(), p);
+    if (checked.errors) return res.status(400).json({ message: 'Check the highlighted poll fields.', errors: checked.errors });
+    const changed = !sameSlots(p.slots, checked.value.slots);
+    if (changed && p.status === 'finalized') return res.status(409).json({ message: 'This meeting time is confirmed. Create a replacement poll to propose different times.' });
+    if (changed && p.responses.length && !resetResponses) return res.status(409).json({ message: 'Changing time options clears existing availability. Confirm the reset and ask participants to respond again.', code: 'POLL_RESPONSES_REQUIRE_RESET' });
+    const saved = await data.change(p._id, b.version, { ...checked.value, ...(changed ? { responses: [] } : {}) }, changed ? 'times-edited-responses-reset' : 'details-edited', req.admin.id);
+    if (!saved) return conflict(res);
+    res.json({ poll: pollView(saved, null, true), responsesReset: changed && p.responses.length > 0 });
+  }));
+  app.post('/api/workspace/scheduling/:id/publish', sameOrigin, parse, limited('publish', 10), safe(async (req, res) => {
+    const p = await load(req, res, true); if (!p) return;
+    const { version, ...input } = req.body || {};
+    if (p.status !== 'draft' || !Number.isSafeInteger(version) || version < 0 || p.version !== version) return conflict(res);
+    const checked = checkPoll(input); if (checked.errors) return res.status(400).json({ message: 'Complete the highlighted fields before publishing.', errors: checked.errors });
+    const saved = await data.change(p._id, version, { ...checked.value, status: 'open', draftInput: null, publishedAt: new Date() }, 'published', req.admin.id);
+    if (!saved) return conflict(res);
+    res.json({ poll: pollView(saved, null, true), shareUrl: origin + '/schedule/' + p._id });
+  }));
   app.patch('/api/workspace/scheduling/:id/privacy', sameOrigin, parse, limited('privacy', 20), safe(async (req, res) => {
     if (!req.staff.permissions.includes('scheduling:privacy')) return res.status(403).json({ message: 'Only an administrator can change poll anonymity.' });
     const p = await load(req, res, true); if (!p) return;
@@ -42,7 +81,7 @@ function registerScheduling(app, { env, store, origin, sameOrigin, privateHeader
     const p = await load(req, res, true); if (!p) return;
     const b = req.body;
     if (!b || Object.keys(b).some(k => !['action', 'slotId', 'meetingUrl', 'version'].includes(k)) || !['finalize', 'cancel'].includes(b.action) || !Number.isSafeInteger(b.version) || b.version < 0) return res.status(400).json({ message: 'Choose a final time or cancel the poll using its current revision.' });
-    if (p.status === 'cancelled' || (b.action === 'finalize' && p.status !== 'open')) return res.status(409).json({ message: 'This poll is already closed. Refresh to see the result.' });
+    if (p.status === 'draft' || p.status === 'cancelled' || (b.action === 'finalize' && p.status !== 'open')) return res.status(409).json({ message: 'This poll is already closed. Refresh to see the result.' });
     const fields = { status: b.action === 'finalize' ? 'finalized' : 'cancelled' };
     if (b.action === 'finalize') {
       const slot = p.slots.find(s => s.id === b.slotId); if (!slot || +slot.startsAt <= Date.now()) return res.status(400).json({ message: 'Choose one of the future proposed times.' });

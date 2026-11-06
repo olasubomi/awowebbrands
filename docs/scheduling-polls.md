@@ -27,7 +27,7 @@ Every approved active account receives `scheduling:manage:own` while scheduling 
 ## Main flow
 
 1. Homepage member sign-in → workspace/profile → Create and manage meeting polls.
-2. Organizer supplies a title, optional description, 2–20 start/end options, and response deadline. Times are entered in the browser's device time zone and stored as UTC instants with an IANA display zone.
+2. Organizer can save an incomplete private draft, reopen it later, then publish a completed title, optional description, 2–20 start/end options, and response deadline. Times are entered in the browser's device time zone and stored as UTC instants with an IANA display zone.
 Time entry supports separate date and directly editable 24-hour time fields, including the response deadline. Type `9`, `930`, `0930`, or `09:30`; valid values normalize to `HH:MM` on blur. Focusing a time field selects its contents for replacement. Each option has **Duplicate option**, which copies both dates/times into a new independent row immediately below it, and **Remove option**. A missing end date initially follows the chosen start date; it can be changed for overnight meetings. Duplicates count toward the 20-option limit and must be adjusted before saving because exact duplicate options remain invalid.
 
 3. Save → copy `/schedule/{pollId}`. Anyone with this unguessable 256-bit capability link can view and participate. No public poll directory exists.
@@ -35,7 +35,7 @@ Time entry supports separate date and directly editable 24-hour time fields, inc
 5. Organizer reviews availability and explicitly confirms one future option, optionally with an HTTPS meeting link. Voting closes; the same link shows the confirmed time and an ICS download.
 6. Organizer can cancel; the shared result and ICS cancellation reflect that decision. Downloaded calendar files are snapshots, not automatic subscriptions or live calendar updates.
 
-Deadlines close voting but still let the organizer confirm a future proposed option. Options cannot be edited after creation in this first release. Create a replacement poll if the proposed times need to change. Creation validation rejects empty titles, unknown zones, invalid or past dates, duplicate options, options longer than 24 hours and a deadline after the earliest start. UTC offsets are required in API timestamps. The UI rejects local DST-gap times; repeated fall-back times use the browser's first occurrence and are disclosed in the form.
+Deadlines close voting but still let the organizer confirm a future proposed option. Published polls have an **Edit poll** action. Title, description, time zone and deadline edits preserve responses when the UTC time options are unchanged. Adding, removing, reordering or changing any time option after votes exist requires explicit confirmation and resets all responses; the sharing link remains the same and participants must vote again. Confirmed polls allow detail edits, but their time options are locked; create a replacement poll to reschedule a confirmed meeting. Cancelled polls are read-only. Unchanged historical times and deadlines remain valid for detail-only edits, while newly proposed times must be in the future. Creation validation rejects empty titles, unknown zones, invalid or past dates, duplicate options, options longer than 24 hours and a deadline after the earliest start. UTC offsets are required in API timestamps. Drafts retain their original IANA time zone when reopened on another device, so their raw clock times are not silently reinterpreted. Publishing validates the instants in that saved zone. Unchanged published values retain their original seconds/milliseconds during edits. The UI rejects local DST-gap times; repeated fall-back times use the browser's first occurrence and are disclosed in the form.
 
 ## Participant privacy and response ownership
 
@@ -57,7 +57,9 @@ Collection: `sws_scheduling_preview_polls` or `sws_scheduling_prod_polls`. Each 
 | `timezone` | IANA display zone |
 | `slots[]` | 2–20 immutable `{id, startsAt: Date, endsAt: Date}` options |
 | `deadline` | Date; voting closes at this instant |
-| `status` | open, finalized, cancelled |
+| `status` | draft, open, finalized, cancelled |
+| `draftInput` | Private incomplete form snapshot: title, description, IANA zone, deadline `{date,time}`, slots `[{start:{date,time},end:{date,time}}]`; cleared on publishing |
+| `publishedAt` | Date on explicit draft publication; older open polls may omit it |
 | `anonymous` | Boolean, false by default; admin-controlled |
 | `responses[]` | At most 100 `{guestHash, name, votes[], updatedAt}` rows; votes ordered by immutable slots |
 | `selectedSlotId`, `meetingUrl`, `finalizedAt` | Set only by organizer/admin confirmation |
@@ -73,6 +75,9 @@ The 100-response/20-option limits intentionally bound document size and request 
 | Method | Route | Access / request |
 | --- | --- | --- |
 | GET | `/api/workspace/scheduling?after={id}` | Session; own polls, admins all |
+| POST | `/api/workspace/scheduling/drafts` | Session; `{draftInput}`; incomplete fields allowed within bounded types/lengths, private until publication |
+| PATCH | `/api/workspace/scheduling/:id` | Owner/admin; drafts `{version,draftInput}`; published `{version,title,description,timezone,deadline,slots,resetResponses?:boolean}` |
+| POST | `/api/workspace/scheduling/:id/publish` | Owner/admin; draft only, complete canonical poll fields plus current `version` |
 | POST | `/api/workspace/scheduling` | Session; `{title,description,timezone,deadline,slots:[{startsAt,endsAt}]}` |
 | GET | `/api/workspace/scheduling/:id` | Owner or admin; full permitted results + shareUrl |
 | POST | `/api/workspace/scheduling/:id/decision` | Owner/admin; `{action:"finalize",slotId,meetingUrl:"",version}` or `{action:"cancel",version}` |
@@ -82,7 +87,7 @@ The 100-response/20-option limits intentionally bound document size and request 
 | DELETE | `/api/scheduling/polls/:id/response` | Guest cookie; `{version}`; only this browser's response |
 | GET | `/api/scheduling/polls/:id/calendar.ics` | Shared link; only after finalization, includes cancellation if later cancelled |
 
-Unknown/unauthorized poll IDs are 404. Invalid fields 400; missing session 401; CSRF or role denial 403; stale revision, closed voting or capacity 409; shared rate limits 429 with Retry-After; safe correlated failures 503. Public reads use 90 requests/minute/IP, responses 20/minute/IP, creation 10/minute/account, and decisions/privacy 20/minute/account. Management reads use 60–90/minute/account. Limits are stored in shared MongoDB rate buckets.
+Unknown/unauthorized poll IDs and all public draft reads/writes/exports are 404. Draft create/save responses contain no share URL. Only owner/admin management views include `draftInput`. Invalid fields 400; missing session 401; CSRF or role denial 403; stale revision, closed voting or capacity 409; shared rate limits 429 with Retry-After; safe correlated failures 503. Public reads use 90 requests/minute/IP, responses 20/minute/IP, creation 10/minute/account, and decisions/privacy 20/minute/account. Management reads use 60–90/minute/account. Limits are stored in shared MongoDB rate buckets.
 
 ## Convenience roadmap inspired by Doodle
 
@@ -109,3 +114,7 @@ Name-only link sharing cannot identify people who never responded. Automatic non
 ## Validation and limits
 
 Local HTTP tests exercise actual SWS email-code auth with isolated test storage: guest voting, owner/admin separation, exact Origin, anonymous redaction, deadlines/capacity, revision conflicts, cancellation, ICS and profile access. Google OAuth remains unresolved/high-priority backlog SWS-24; no calendar configuration or provider calls are changed by this feature. Real Atlas persistence and external guest access through the final hosting configuration must be checked before production. Local visual fixtures verified guest voting, field-specific errors, admin anonymity and final-time rendering in the browser. They are not evidence of live authentication or MongoDB behavior. Full local suite: 68 passed, one disposable-MongoDB test skipped.
+
+## Draft/edit verification checkpoint
+
+November 6, 2026: browser fixture verified saving a title-only draft, reopening it with blank times intact, completing/publishing it, and editing its published title using the same poll ID. HTTP tests cover guest draft denial (including response and ICS), owner/admin boundaries, malformed drafts, invalid publication, revision conflicts, vote preservation, explicit time-change resets, confirmed-meeting time locks and detail edits with unchanged expired dates. Full local suite at this checkpoint: 71 passed, one disposable-MongoDB test skipped. No live emails, Google calls or production writes were made. Live Atlas persistence still needs owner validation.

@@ -4,8 +4,8 @@ function createSchedulingStore(collection) {
   let pending;
   const ready = () => pending ||= collection().then(async c => { await c.createIndex({ ownerId: 1, _id: 1 }); return c; }).catch(e => { pending = null; throw e; });
   return {
-    async create(input, ownerId) {
-      const now = new Date(), poll = { _id: token(), ownerId, ...input, status: 'open', anonymous: false, responses: [], version: 0, createdAt: now, updatedAt: now, history: [{ action: 'created', actor: ownerId, at: now }] };
+    async create(input, ownerId, status = 'open') {
+      const now = new Date(), poll = { _id: token(), ownerId, ...input, status, anonymous: false, responses: [], version: 0, createdAt: now, updatedAt: now, history: [{ action: status === 'draft' ? 'draft-saved' : 'published', actor: ownerId, at: now }] };
       await (await ready()).insertOne(poll, { writeConcern: { w: 'majority' } }); return poll;
     },
     async get(id) { return (await ready()).findOne({ _id: id }); },

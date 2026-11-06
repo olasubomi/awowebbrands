@@ -11,7 +11,7 @@ const input = () => ({ title: 'Engineering conversation', description: 'Agree on
 function memoryScheduling() {
   const polls = new Map();
   return { polls,
-    async create(data, ownerId) { const now = new Date(), p = { _id: token(), ownerId, ...data, anonymous: false, responses: [], status: 'open', version: 0, createdAt: now, updatedAt: now }; polls.set(p._id, structuredClone(p)); return p; },
+    async create(data, ownerId, status = 'open') { const now = new Date(), p = { _id: token(), ownerId, ...data, anonymous: false, responses: [], status, version: 0, createdAt: now, updatedAt: now }; polls.set(p._id, structuredClone(p)); return p; },
     async get(id) { return structuredClone(polls.get(id)); },
     async list(ownerId) { return { polls: [...polls.values()].filter(p => !ownerId || p.ownerId === ownerId).map(p => ({ id: p._id, title: p.title, status: p.status })), next: null }; },
     async change(id, version, fields, action, actor, voting) { const p = polls.get(id); if (!p || p.version !== version || (voting && (p.status !== 'open' || +p.deadline <= Date.now()))) return null; Object.assign(p, structuredClone(fields), { version: p.version + 1, updatedAt: new Date() }); return structuredClone(p); }
@@ -113,4 +113,50 @@ test('calendar export uses stable UID and escapes/folds user content; hidden pol
   const p = { _id: token(), ...checkPoll(input()).value, status: 'finalized', selectedSlotId: '1', title: 'A\nATTENDEE:injected', description: 'é'.repeat(150), version: 4, updatedAt: new Date(), anonymous: true, ownerId: 'private-owner', responses: [{ guestHash: digest('private'), name: 'Hidden', votes: ['yes', 'no'] }] };
   const body = calendar(p); assert.ok(!body.includes('\r\nATTENDEE:')); body.split('\r\n').forEach(l => assert.ok(Buffer.byteLength(l) <= 75));
   assert.equal(pollView(p, null).responses, undefined); assert.equal(pollView(p, null).ownerId, undefined);
+});
+
+function draftBody() { return { title: 'Work in progress', description: '', timezone: 'America/Los_Angeles', deadline: { date: '', time: '' }, slots: [{ start: { date: '2026-12-10', time: '9' }, end: { date: '', time: '' } }] }; }
+test('incomplete drafts persist privately, reject guest access and owner forgery, and publish only with complete valid details', async t => {
+  const f = await fixture(t), alice = await f.login('alice@example.com'), bob = await f.login('bob@example.com');
+  let r = await f.request('/api/workspace/scheduling/drafts', alice, 'POST', { draftInput: draftBody() }); assert.equal(r.status, 201);
+  const draftResponse = await r.json(), p = draftResponse.poll, path = '/api/workspace/scheduling/' + p.id, publicPath = '/api/scheduling/polls/' + p.id;
+  assert.equal(p.status, 'draft'); assert.equal(draftResponse.shareUrl, undefined); assert.equal(p.draftInput.slots[0].end.date, '');
+  assert.equal((await f.request(publicPath)).status, 404); assert.equal((await f.request(publicPath + '/calendar.ics')).status, 404);
+  assert.equal((await f.request(publicPath + '/response', await guest(f, (await created(f, alice)).id), 'POST', { name: 'Guest', votes: ['yes'], version: 0 })).status, 404);
+  assert.equal((await f.request(path, bob)).status, 404); assert.equal((await f.request(path + '/publish', bob, 'POST', { ...input(), version: 0 })).status, 404);
+  r = await f.request(path, alice, 'PATCH', { version: 0, draftInput: { ...draftBody(), title: 'Draft revised' } }); assert.equal(r.status, 200); assert.equal((await r.json()).poll.version, 1);
+  assert.equal((await f.request(path, alice, 'PATCH', { version: 0, draftInput: draftBody() })).status, 409);
+  assert.equal((await f.request(path + '/publish', alice, 'POST', { title: '', version: 1 })).status, 400);
+  assert.equal((await f.request(path + '/decision', alice, 'POST', { action: 'finalize', slotId: '1', version: 1 })).status, 409);
+  r = await f.request(path + '/publish', alice, 'POST', { ...input(), version: 1 }); assert.equal(r.status, 200);
+  const published = await r.json(); assert.equal(published.poll.status, 'open'); assert.equal(published.poll.id, p.id); assert.ok(published.shareUrl.endsWith('/schedule/' + p.id)); assert.equal(published.poll.draftInput, undefined);
+  assert.equal((await f.request(publicPath)).status, 200); assert.equal((await f.request(path + '/publish', alice, 'POST', { ...input(), version: 2 })).status, 409);
+  assert.equal((await f.request('/api/workspace/scheduling/drafts', alice, 'POST', { draftInput: { ...draftBody(), ownerId: 'forged' } })).status, 400);
+});
+test('published details retain votes, time changes require explicit response reset, and stale editors cannot overwrite newer responses', async t => {
+  const f = await fixture(t), alice = await f.login('alice@example.com'), p = await created(f, alice), guestCookie = await guest(f, p.id), path = '/api/workspace/scheduling/' + p.id;
+  await f.request('/api/scheduling/polls/' + p.id + '/response', guestCookie, 'POST', { name: 'A', votes: ['yes', 'maybe'], version: 0 });
+  const fields = { title: 'Revised title', description: p.description, timezone: p.timezone, deadline: p.deadline, slots: p.slots.map(({ startsAt, endsAt }) => ({ startsAt, endsAt })) };
+  let r = await f.request(path, alice, 'PATCH', { ...fields, version: 1 }); assert.equal(r.status, 200); assert.equal((await r.json()).poll.responseCount, 1);
+  const changed = { ...fields, slots: fields.slots.map((s, i) => i ? s : { startsAt: new Date(+new Date(s.startsAt) + 60000).toISOString(), endsAt: new Date(+new Date(s.endsAt) + 60000).toISOString() }) };
+  r = await f.request(path, alice, 'PATCH', { ...changed, version: 2 }); assert.equal(r.status, 409); assert.equal((await r.json()).code, 'POLL_RESPONSES_REQUIRE_RESET');
+  assert.equal((await f.request(path, alice, 'PATCH', { ...changed, version: 2, resetResponses: 'true' })).status, 400);
+  r = await f.request(path, alice, 'PATCH', { ...changed, version: 2, resetResponses: true }); assert.equal(r.status, 200); const reset = await r.json(); assert.equal(reset.poll.responseCount, 0); assert.equal(reset.responsesReset, true);
+  assert.equal((await f.request('/api/scheduling/polls/' + p.id + '/response', guestCookie, 'POST', { name: 'A', votes: ['yes', 'yes'], version: 2 })).status, 409);
+  assert.equal((await f.request(path, alice, 'PATCH', { ...fields, version: 2 })).status, 409);
+});
+test('confirmed polls allow detail edits but not time changes; expired unchanged dates remain editable without accepting new past dates', async t => {
+  const f = await fixture(t), alice = await f.login('alice@example.com'), p = await created(f, alice), path = '/api/workspace/scheduling/' + p.id;
+  const fields = { title: 'Updated details', description: p.description, timezone: p.timezone, deadline: p.deadline, slots: p.slots.map(({ startsAt, endsAt }) => ({ startsAt, endsAt })) };
+  assert.equal((await f.request(path + '/decision', alice, 'POST', { action: 'finalize', slotId: '1', version: 0 })).status, 200);
+  let r = await f.request(path, alice, 'PATCH', { ...fields, version: 1 }); assert.equal(r.status, 200); assert.equal((await r.json()).poll.selectedSlotId, '1');
+  const changed = { ...fields, slots: fields.slots.map(s => ({ startsAt: new Date(+new Date(s.startsAt) + 60000).toISOString(), endsAt: new Date(+new Date(s.endsAt) + 60000).toISOString() })) };
+  assert.equal((await f.request(path, alice, 'PATCH', { ...changed, version: 2, resetResponses: true })).status, 409);
+  const stored = f.scheduling.polls.get(p.id); stored.status = 'open'; stored.deadline = new Date(Date.now() - 3600000); stored.slots = stored.slots.map(s => ({ ...s, startsAt: new Date(Date.now() - 1800000), endsAt: new Date(Date.now() - 1200000) }));
+  // Distinct expired options are preserved for a metadata edit, rather than reinterpreted as new options.
+  stored.slots[1].startsAt = new Date(+stored.slots[1].startsAt + 60000); stored.slots[1].endsAt = new Date(+stored.slots[1].endsAt + 60000);
+  const expired = { ...fields, deadline: stored.deadline.toISOString(), slots: stored.slots.map(s => ({ startsAt: s.startsAt.toISOString(), endsAt: s.endsAt.toISOString() })) };
+  assert.equal((await f.request(path, alice, 'PATCH', { ...expired, version: 2 })).status, 200);
+  expired.slots[0].startsAt = new Date(Date.now() - 600000).toISOString();
+  assert.equal((await f.request(path, alice, 'PATCH', { ...expired, version: 3, resetResponses: true })).status, 400);
 });
