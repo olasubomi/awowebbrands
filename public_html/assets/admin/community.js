@@ -153,7 +153,8 @@
     const response = await fetch('/api/workspace/me', { credentials: 'same-origin' });
     if (response.ok) me = await response.json();
     document.getElementById('organizer').hidden = !managing();
-    if (me) document.getElementById('member-login').textContent = me.email;
+    const login = document.getElementById('member-login');
+    if (me && login) { login.textContent = 'My workspace'; login.href = '/workspace'; }
     try { await googleStatus(); } catch (e) { notify(e.message); }
     await load(); await summary();
     if (googleResult) notify(googleResult === 'connected' ? 'Google account connected. Create your SWS business calendar next if needed.' : (Object.hasOwn(googleFailures, googleQuery.get('reason')) ? googleFailures[googleQuery.get('reason')] : googleFailures.GOOGLE_UNAVAILABLE) + googleReference);

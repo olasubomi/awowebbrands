@@ -48,7 +48,6 @@
     data.members.filter(m => !data.bootstrapMembers.some(b => b.email === m.email)).forEach(render);
     next = data.next; document.getElementById('next-page').hidden = !next;
   }
-  document.getElementById('sign-out').addEventListener('click', () => action(async () => { await request('/api/admin-auth/sign-out', 'POST', {}); location.assign('/login'); }));
   if (!list) return;
   document.getElementById('next-page').addEventListener('click', () => action(async () => { cursor = next; await load(); }));
   document.getElementById('invite-form').addEventListener('submit', event => { event.preventDefault(); action(async () => {

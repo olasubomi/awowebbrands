@@ -2,7 +2,7 @@
 const express = require('express');
 const { tokenPattern, token, digest, owns, canCreate, checkPoll, checkDraft, sameSlots, checkBallot, pollView, calendar } = require('./model');
 const { schedulingPage } = require('./pages');
-function registerScheduling(app, { env, store, origin, sameOrigin, privateHeaders }) {
+function registerScheduling(app, { env, store, origin, sameOrigin, privateHeaders, navigation }) {
   const enabled = env.SWS_SCHEDULING_ENABLED === 'true' && env.SWS_STAFF_ENABLED === 'true' && !!origin;
   const available = (req, res, next) => enabled ? next() : res.status(503).json({ message: 'Scheduling polls are not enabled yet.' });
   const data = store.scheduling;
@@ -12,7 +12,7 @@ function registerScheduling(app, { env, store, origin, sameOrigin, privateHeader
   const manage = (req, res, next) => canCreate(req.staff) ? next() : res.status(403).json({ message: 'Scheduling Organizer access is required.' });
   app.use(['/schedule', '/api/scheduling'], privateHeaders, (req, res, next) => { res.set('Referrer-Policy', 'no-referrer'); next(); });
   app.use(['/schedule', '/api/scheduling', '/workspace/scheduling', '/api/workspace/scheduling'], available);
-  app.get(['/schedule/:id', '/workspace/scheduling', '/workspace/scheduling/:id'], (req, res) => res.send(schedulingPage(req.path.startsWith('/workspace'))));
+  app.get(['/schedule/:id', '/workspace/scheduling', '/workspace/scheduling/:id'], (req, res) => res.send(schedulingPage(req.path.startsWith('/workspace'), req.staff, navigation)));
   app.use('/api/workspace/scheduling', manage);
   app.get('/api/workspace/scheduling', limited('list', 60), safe(async (req, res) => {
     if (Object.keys(req.query).some(k => k !== 'after') || (req.query.after !== undefined && (typeof req.query.after !== 'string' || !tokenPattern.test(req.query.after)))) return res.status(400).json({ message: 'Invalid poll page.' });

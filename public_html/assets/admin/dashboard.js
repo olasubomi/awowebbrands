@@ -61,7 +61,6 @@
     try { await api('/api/admin/inquiries/' + encodeURIComponent(id) + '/status', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ status: el('inquiry-status').value, version: current.version }) }); loading = false; await loadDetail(); notify('Status saved. No email was sent.'); }
     catch (error) { notify(error.message, true); } finally { loading = false; button.disabled = false; }
   });
-  el('sign-out').addEventListener('click', async event => { event.currentTarget.disabled = true; try { await api('/api/admin-auth/sign-out', { method: 'POST', headers: { 'Content-Type': 'application/json' } }); location.assign('/login'); } catch (error) { notify(error.message, true); event.currentTarget.disabled = false; } });
   if (id) { el('list-view').hidden = true; el('detail-view').hidden = false; el('reload').addEventListener('click', loadDetail); loadDetail(); }
   else {
     el('filters').addEventListener('submit', event => { event.preventDefault(); page = 1; loadList(); });

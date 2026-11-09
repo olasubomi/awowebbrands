@@ -26,7 +26,7 @@ Every approved active account receives `scheduling:manage:own` while scheduling 
 
 ## Main flow
 
-1. Homepage member sign-in → workspace/profile → Create and manage meeting polls.
+1. Choose **Sign in** from the homepage, then **Meeting polls** in the workspace menu. The public XML sitemap excludes the workspace, drafts, and shared poll links.
 2. Organizer can save an incomplete private draft, reopen it later, then publish a completed title, optional description, 2–20 start/end options, and response deadline. Times are entered in the browser's device time zone and stored as UTC instants with an IANA display zone.
 Time entry supports separate date and directly editable 24-hour time fields, including the response deadline. Type `9`, `930`, `0930`, or `09:30`; valid values normalize to `HH:MM` on blur. Focusing a time field selects its contents for replacement. Each option has **Duplicate option**, which copies both dates/times into a new independent row immediately below it, and **Remove option**. A missing end date initially follows the chosen start date; it can be changed for overnight meetings. Duplicates count toward the 20-option limit and must be adjusted before saving because exact duplicate options remain invalid.
 

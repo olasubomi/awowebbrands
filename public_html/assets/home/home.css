@@ -830,3 +830,7 @@ nav .button {
     scroll-behavior: auto;
   }
 }
+
+@media (min-width: 761px) {
+  #main-nav { flex-wrap: wrap; justify-content: flex-end; row-gap: 10px; }
+}
