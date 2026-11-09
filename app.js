@@ -2,11 +2,13 @@
 
 const express = require('express');
 const path = require('path');
+const { readFileSync } = require('node:fs');
 const crypto = require('crypto');
 const { categories, services, generalService } = require('./lib/services');
 const { validateInquiry } = require('./lib/inquiry-validation');
 const { createInquiryMailer } = require('./lib/inquiry-mailer');
 const { createMongoStore } = require('./lib/inquiry-store');
+const { registerAdmin } = require('./lib/admin-routes');
 const { createSubmitInquiry } = require('./lib/submit-inquiry');
 const { inquiryFailureCode } = require('./lib/inquiry-errors');
 const { catalogPage, servicePage, aboutPage, notFoundPage, sitemap } = require('./lib/site-pages');
@@ -29,6 +31,7 @@ function createApp(options = {}) {
     if (env.VERCEL_ENV === 'preview') res.set('X-Robots-Tag', 'noindex, nofollow');
     next();
   });
+  const navigation = registerAdmin(app, { env, store, authRuntime: options.authRuntime, sendAdminCode: options.sendAdminCode, jiraService: options.jiraService });
   app.get('/api/services', (req, res) => res.json({ categories, services, generalService }));
 
   app.post('/api/inquiries', express.json({ limit: '20kb' }), async (req, res) => {
@@ -72,12 +75,18 @@ function createApp(options = {}) {
     next();
   };
   app.use('/intake-assets', express.static(path.join(web, 'assets'), { maxAge: 0 }));
-  app.get(['/services', '/services/'], pageHeaders, (req, res) => res.send(catalogPage()));
+  const publicNavigation = html => html.replace('<!--member-menu-->',
+    (navigation.community ? '<a href="/events">Events</a>' : '') + (navigation.signIn ? '<a href="/login">Sign in</a>' : ''))
+    .replace('<!--member-footer-->', (navigation.community ? '<a href="/events">Community events</a>' : '') +
+      (navigation.signIn ? '<a href="/login">Member &amp; staff sign-in</a>' : ''));
+  const homepage = publicNavigation(readFileSync(path.join(__dirname, 'public_html/index.html'), 'utf8'));
+  app.get(['/', '/index.html'], (req, res) => res.set('Cache-Control', 'no-cache').send(homepage));
+  app.get(['/services', '/services/'], pageHeaders, (req, res) => res.send(publicNavigation(catalogPage())));
   app.get('/services/:serviceId', pageHeaders, (req, res) => {
     const html = servicePage(req.params.serviceId);
-    return html ? res.send(html) : res.status(404).send(notFoundPage());
+    return html ? res.send(publicNavigation(html)) : res.status(404).send(publicNavigation(notFoundPage()));
   });
-  app.get(['/about', '/about/'], pageHeaders, (req, res) => res.send(aboutPage()));
+  app.get(['/about', '/about/'], pageHeaders, (req, res) => res.send(publicNavigation(aboutPage())));
   // Verified earlier About-page URL, preserving query parameters for old bookmarks.
   app.get(['/about-us.html', '/about-us', '/about-us/'], (req, res) => {
     const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
