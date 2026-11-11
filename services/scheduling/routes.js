@@ -80,14 +80,17 @@ function registerScheduling(app, { env, store, origin, sameOrigin, privateHeader
   app.post('/api/workspace/scheduling/:id/decision', sameOrigin, parse, limited('decision', 20), safe(async (req, res) => {
     const p = await load(req, res, true); if (!p) return;
     const b = req.body;
-    if (!b || Object.keys(b).some(k => !['action', 'slotId', 'meetingUrl', 'version'].includes(k)) || !['finalize', 'cancel'].includes(b.action) || !Number.isSafeInteger(b.version) || b.version < 0) return res.status(400).json({ message: 'Choose a final time or cancel the poll using its current revision.' });
+    if (!b || Object.keys(b).some(k => !['action', 'slotId', 'meetingUrl', 'version'].includes(k)) || !['finalize', 'reschedule', 'cancel'].includes(b.action) || !Number.isSafeInteger(b.version) || b.version < 0) return res.status(400).json({ message: 'Choose, change or cancel a confirmed time using the current poll revision.' });
     if (p.status === 'draft' || p.status === 'cancelled' || (b.action === 'finalize' && p.status !== 'open')) return res.status(409).json({ message: 'This poll is already closed. Refresh to see the result.' });
-    const fields = { status: b.action === 'finalize' ? 'finalized' : 'cancelled' };
-    if (b.action === 'finalize') {
+    const reschedule = b.action === 'reschedule';
+    if (reschedule && (p.status !== 'finalized' || !p.slots.some(s => s.id === p.selectedSlotId && +s.startsAt > Date.now()))) return res.status(409).json({ message: 'You can only change a confirmed meeting before it starts.' });
+    const fields = { status: b.action === 'cancel' ? 'cancelled' : 'finalized' };
+    if (b.action !== 'cancel') {
+      if (reschedule && b.slotId === p.selectedSlotId) return res.status(400).json({ message: 'Choose a different proposed time.' });
       const slot = p.slots.find(s => s.id === b.slotId); if (!slot || +slot.startsAt <= Date.now()) return res.status(400).json({ message: 'Choose one of the future proposed times.' });
-      let link = typeof b.meetingUrl === 'string' ? b.meetingUrl.trim() : b.meetingUrl === undefined ? '' : null;
+      let link = typeof b.meetingUrl === 'string' ? b.meetingUrl.trim() : b.meetingUrl === undefined ? (reschedule ? p.meetingUrl || '' : '') : null;
       try { if (link === null || link.length > 2048) throw Error(); if (link) { const u = new URL(link); if (u.protocol !== 'https:' || !u.hostname.includes('.') || u.username || u.password || u.port) throw Error(); } } catch (_) { return res.status(400).json({ message: 'Leave the meeting link empty or enter a full HTTPS URL.' }); }
-      Object.assign(fields, { selectedSlotId: slot.id, meetingUrl: link, finalizedAt: new Date() });
+      Object.assign(fields, { selectedSlotId: slot.id, meetingUrl: link }, reschedule ? { rescheduledAt: new Date() } : { finalizedAt: new Date() });
     }
     const saved = await data.change(p._id, b.version, fields, b.action, req.admin.id);
     if (!saved) return res.status(409).json({ message: 'This poll changed. Refresh before confirming a decision.' });
