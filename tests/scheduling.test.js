@@ -89,7 +89,23 @@ test('simultaneous votes and decisions cannot silently overwrite each other; clo
   assert.equal((await f.request(decision, alice, 'POST', { action: 'finalize', slotId: '1', meetingUrl: '', version: 1 })).status, 200);
   assert.equal((await f.request(path + '/response', a, 'POST', { name: 'A', votes: ['yes', 'yes'], version: 2 })).status, 409);
   const ics = await (await f.request(path + '/calendar.ics')).text(); assert.match(ics, /STATUS:CONFIRMED/); assert.ok(!ics.includes('ATTENDEE'));
-  assert.equal((await f.request(decision, alice, 'POST', { action: 'cancel', version: 2 })).status, 200);
+  const change = { action: 'reschedule', slotId: '2', version: 2 };
+  const bob = await f.login('bob@example.com');
+  assert.equal((await f.request(decision, bob, 'POST', change)).status, 404);
+  assert.equal((await f.request(decision, alice, 'POST', { ...change, slotId: '1' })).status, 400);
+  assert.equal((await f.request(decision, alice, 'POST', { ...change, version: 1 })).status, 409);
+  assert.equal((await f.request(decision, alice, 'POST', change)).status, 200);
+  const guestView = (await (await f.request(path, a)).json()).poll;
+  assert.equal(guestView.selectedSlotId, '2');
+  assert.equal(guestView.responseCount, 1);
+  assert.equal(guestView.acceptingResponses, false);
+  assert.ok(guestView.rescheduledAt);
+  const revisedCalendar = await (await f.request(path + '/calendar.ics')).text();
+  assert.equal(revisedCalendar.match(/^UID:.+$/m)[0], ics.match(/^UID:.+$/m)[0]);
+  assert.notEqual(revisedCalendar.match(/^DTSTART:.+$/m)[0], ics.match(/^DTSTART:.+$/m)[0]);
+  assert.match(revisedCalendar, /SEQUENCE:3/);
+  assert.equal((await f.request(decision, alice, 'POST', { action: 'cancel', version: 3 })).status, 200);
+  assert.equal((await f.request(decision, alice, 'POST', { ...change, version: 4 })).status, 409);
   assert.match(await (await f.request(path + '/calendar.ics')).text(), /STATUS:CANCELLED/);
 });
 test('deadline, response cap, disabled flag, and unknown poll references are enforced', async t => {

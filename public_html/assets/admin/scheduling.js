@@ -101,10 +101,9 @@
     }
     return d.toISOString();
   }
-  function format(slot) {
-    const zone = $('viewer-zone').value || deviceZone;
-    return new Intl.DateTimeFormat(undefined, { timeZone: zone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(slot.startsAt)) + ' – ' +
-      new Intl.DateTimeFormat(undefined, { timeZone: zone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(slot.endsAt));
+  function formatSlot(slot, formatter) {
+    const start = new Date(slot.startsAt), end = new Date(slot.endsAt);
+    return formatter.formatRange?.(start, end) || formatter.format(start) + ' – ' + formatter.format(end);
   }
   function render(d, keepDraft = false) {
     const draft = keepDraft && !$('response-form').hidden ? { name: $('participant-name').value, votes: [...$('response-options').querySelectorAll('fieldset')].map(f => f.querySelector(':checked')?.value) } : null;
@@ -113,38 +112,47 @@
     $('poll-status').textContent = poll.status === 'open' && !poll.acceptingResponses ? 'Responses closed · awaiting organizer decision' : poll.status;
     $('detail-deadline').textContent = poll.status === 'draft' ? 'Private draft. Only you and administrators can view it until you publish.' : 'Response deadline: ' + new Intl.DateTimeFormat(undefined, { timeZone: deviceZone, dateStyle: 'medium', timeStyle: 'short' }).format(new Date(poll.deadline)) + ' (' + deviceZone + '). Options proposed in ' + poll.timezone + '.';
     const selectedZone = $('viewer-zone').value || deviceZone; $('viewer-zone').replaceChildren();
-    [...new Set([deviceZone, poll.timezone, 'UTC'])].forEach(z => { const option = node('option', z, $('viewer-zone')); option.value = z; }); $('viewer-zone').value = selectedZone;
+    const zones = [...new Set([deviceZone, poll.timezone, 'UTC'])];
+    zones.forEach(z => { const option = node('option', z, $('viewer-zone')); option.value = z; });
+    $('viewer-zone').value = zones.includes(selectedZone) ? selectedZone : deviceZone;
+    const formatter = new Intl.DateTimeFormat(undefined, { timeZone: $('viewer-zone').value, weekday: 'long', month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' });
+    const labels = new Map(poll.slots.map(s => [s.id, formatSlot(s, formatter)]));
     $('share-panel').hidden = !manage || poll.status === 'draft'; if (manage && poll.status !== 'draft') $('share-url').value = d.shareUrl || location.origin + '/schedule/' + poll.id;
     $('privacy-notice').textContent = poll.status === 'draft' ? 'This draft is private. Participant visibility applies only after publishing.' : poll.responseCount + ' responses. ' + (poll.anonymous ? 'Anonymous mode: names and individual votes are visible only to the organizer and administrators.' : 'Names and individual availability are visible to everyone with this link.');
     $('availability-grid').replaceChildren();
-    poll.slots.forEach((s, i) => { const card = node('article', undefined, $('availability-grid')); node('h3', 'Option ' + (i + 1), card); node('p', format(s), card); node('p', 'Yes: ' + s.totals.yes + ' · Maybe: ' + s.totals.maybe + ' · No: ' + s.totals.no, card); if (s.id === poll.selectedSlotId) node('strong', 'Confirmed time', card); });
+    poll.slots.forEach(s => { const card = node('article', undefined, $('availability-grid')); node('h3', labels.get(s.id), card); node('p', 'Yes: ' + s.totals.yes + ' · Maybe: ' + s.totals.maybe + ' · No: ' + s.totals.no, card); if (s.id === poll.selectedSlotId) node('strong', 'Confirmed time', card); });
     $('confirmed-time').replaceChildren(); $('confirmed-time').hidden = !poll.selectedSlotId;
     if (poll.selectedSlotId) {
-      node('h3', poll.status === 'cancelled' ? 'This meeting was cancelled' : 'The organizer confirmed a time', $('confirmed-time'));
-      node('p', format(poll.slots.find(s => s.id === poll.selectedSlotId)), $('confirmed-time'));
+      node('h3', poll.status === 'cancelled' ? 'This meeting was cancelled' : poll.rescheduledAt ? 'The organizer changed the confirmed time' : 'The organizer confirmed a time', $('confirmed-time'));
+      node('p', labels.get(poll.selectedSlotId), $('confirmed-time'));
       if (poll.meetingUrl && poll.status === 'finalized') { const link = node('a', 'Open meeting link', $('confirmed-time')); link.href = poll.meetingUrl; link.rel = 'noreferrer noopener'; link.target = '_blank'; }
       const dl = node('p', undefined, $('confirmed-time')), a = node('a', poll.status === 'cancelled' ? 'Download cancellation (.ics)' : 'Add confirmed time to calendar (.ics)', dl); a.href = '/api/scheduling/polls/' + poll.id + '/calendar.ics';
     }
     $('participant-results').replaceChildren();
     if (!poll.responses) node('p', 'Individual responses are hidden by an administrator.', $('participant-results'));
     else if (!poll.responses.length) node('p', 'No responses yet.', $('participant-results'));
-    else poll.responses.forEach(r => { const row = node('div', undefined, $('participant-results')); row.className = 'participant-result'; node('strong', r.name, row); node('p', r.votes.map((v, i) => 'Option ' + (i + 1) + ': ' + v).join(' · '), row); });
+    else poll.responses.forEach(r => { const row = node('div', undefined, $('participant-results')); row.className = 'participant-result'; node('strong', r.name, row); node('p', r.votes.map((v, i) => labels.get(poll.slots[i].id) + ': ' + v).join(' · '), row); });
     $('edit-poll').hidden = !manage || poll.status === 'cancelled'; $('edit-poll').textContent = poll.status === 'draft' ? 'Continue draft' : 'Edit poll';
     $('response-form').hidden = manage || !poll.acceptingResponses;
     $('response-options').replaceChildren(); $('participant-name').value = draft?.name ?? poll.myResponse?.name ?? '';
     if (!$('response-form').hidden) poll.slots.forEach((s, i) => {
-      const fieldset = node('fieldset', undefined, $('response-options')); fieldset.className = 'response-option'; node('legend', 'Option ' + (i + 1) + ': ' + format(s), fieldset);
+      const fieldset = node('fieldset', undefined, $('response-options')); fieldset.className = 'response-option'; node('legend', labels.get(s.id), fieldset);
       ['yes', 'maybe', 'no'].forEach(c => { const label = node('label', undefined, fieldset), radio = node('input', undefined, label); radio.type = 'radio'; radio.name = 'availability-' + s.id; radio.value = c; radio.checked = (draft?.votes[i] ?? poll.myResponse?.votes[i]) === c; label.append(document.createTextNode(c[0].toUpperCase() + c.slice(1))); });
     });
     $('withdraw').hidden = !poll.myResponse; $('organizer-panel').hidden = !manage;
     if (manage) {
-      $('decision-form').hidden = poll.status !== 'open'; $('cancel-poll').hidden = ['draft', 'cancelled'].includes(poll.status);
-      $('final-slot').replaceChildren(); const placeholder = node('option', 'Choose an option', $('final-slot')); placeholder.value = '';
-      poll.slots.forEach((s, i) => { const o = node('option', 'Option ' + (i + 1) + ': ' + format(s), $('final-slot')); o.value = s.id; o.disabled = +new Date(s.startsAt) <= Date.now(); });
-      if (decision) { $('final-slot').value = decision.slot; $('final-link').value = decision.link; }
+      const now = Date.now(), changing = poll.status === 'finalized';
+      const future = poll.slots.filter(s => +new Date(s.startsAt) > now);
+      const canChange = changing && future.some(s => s.id === poll.selectedSlotId) && future.some(s => s.id !== poll.selectedSlotId);
+      $('decision-form').hidden = poll.status !== 'open' && !canChange; $('cancel-poll').hidden = ['draft', 'cancelled'].includes(poll.status);
+      $('decision-submit').textContent = changing ? 'Change confirmed time' : 'Confirm selected time';
+      $('final-slot').replaceChildren(); const placeholder = node('option', changing ? 'Choose another time' : 'Choose a time', $('final-slot')); placeholder.value = '';
+      poll.slots.forEach(s => { const o = node('option', labels.get(s.id), $('final-slot')); o.value = s.id; o.disabled = +new Date(s.startsAt) <= now || (changing && s.id === poll.selectedSlotId); });
+      $('final-slot').value = decision?.slot || '';
+      $('final-link').value = decision?.link ?? poll.meetingUrl ?? '';
       $('privacy-controls').hidden = !privacyAdmin; $('anonymous').checked = poll.anonymous;
     }
-    $('poll-notice').textContent = poll.status === 'draft' ? 'This draft is not published. Save it privately or publish it when complete.' : poll.status === 'cancelled' ? 'This poll is cancelled.' : poll.status === 'finalized' ? 'This meeting time is confirmed. Responses are closed; check this link for any cancellation.' : !poll.acceptingResponses && poll.status === 'open' ? 'Voting has closed. Return to this link for the final decision.' : manage ? 'To submit your own availability, open the participant link.' : 'Keep this link to see the final time. You can change your response in this browser while voting is open.';
+    $('poll-notice').textContent = poll.status === 'draft' ? 'This draft is not published. Save it privately or publish it when complete.' : poll.status === 'cancelled' ? 'This poll is cancelled.' : poll.status === 'finalized' ? 'This meeting time is confirmed. Responses are closed; check this link for changes or cancellation.' : !poll.acceptingResponses && poll.status === 'open' ? 'Voting has closed. Return to this link for the final decision.' : manage ? 'To submit your own availability, open the participant link.' : 'Keep this link to see the final time. You can change your response in this browser while voting is open.';
   }
   async function load(keepDraft = false) { render(await request((manage ? '/api/workspace/scheduling/' : '/api/scheduling/polls/') + id), keepDraft); }
   async function list(after) {
@@ -211,9 +219,11 @@
   }, 'response'); });
   $('withdraw').addEventListener('click', () => action(async () => { render(await request('/api/scheduling/polls/' + id + '/response', 'DELETE', { version: poll.version })); notify('Your response was withdrawn.'); }));
   $('decision-form').addEventListener('submit', e => { e.preventDefault(); action(async () => {
-    if (!window.confirm('Confirm this time and close voting? Participants must check the shared link; no email will be sent.')) return;
-    render(await request('/api/workspace/scheduling/' + id + '/decision', 'POST', { action: 'finalize', slotId: $('final-slot').value, meetingUrl: $('final-link').value, version: poll.version }));
-    notify('Meeting time confirmed. The shared link now shows your decision.');
+    const changing = poll.status === 'finalized';
+    if (!$('final-slot').value) throw Error('Choose a proposed time first.');
+    if (!window.confirm(changing ? 'Change the confirmed time? Votes will stay saved. Tell participants to check the shared link and update their calendars; no email will be sent.' : 'Confirm this time and close voting? Participants must check the shared link; no email will be sent.')) return;
+    render(await request('/api/workspace/scheduling/' + id + '/decision', 'POST', { action: changing ? 'reschedule' : 'finalize', slotId: $('final-slot').value, meetingUrl: $('final-link').value, version: poll.version }));
+    notify(changing ? 'Confirmed time changed. The same link shows the new time.' : 'Meeting time confirmed. The shared link now shows your decision.');
   }, 'decision'); });
   $('cancel-poll').addEventListener('click', () => action(async () => { if (!window.confirm('Cancel this poll and close responses?')) return; render(await request('/api/workspace/scheduling/' + id + '/decision', 'POST', { action: 'cancel', version: poll.version })); notify('Poll cancelled.'); }));
   $('save-privacy').addEventListener('click', () => action(async () => { if (!$('anonymous').checked && !window.confirm('Make names and individual availability visible to everyone with the link?')) return; render(await request('/api/workspace/scheduling/' + id + '/privacy', 'PATCH', { anonymous: $('anonymous').checked, version: poll.version })); notify('Privacy setting saved.'); }));

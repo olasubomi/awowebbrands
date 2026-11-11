@@ -39,7 +39,7 @@ function checkBallot(body, poll) {
 function pollView(poll, guestHash, organizer = false) {
   const responses = poll.responses || [], own = responses.find(r => r.guestHash === guestHash);
   return { id: poll._id, title: poll.title, description: poll.description, timezone: poll.timezone, deadline: poll.deadline, anonymous: !!poll.anonymous, status: poll.status, version: poll.version, acceptingResponses: poll.status === 'open' && +poll.deadline > Date.now(), responseCount: responses.length,
-    slots: poll.slots.map((s, i) => ({ ...s, totals: Object.fromEntries(choices.map(v => [v, responses.filter(r => r.votes[i] === v).length])) })), selectedSlotId: poll.selectedSlotId || null, meetingUrl: poll.status === 'finalized' ? poll.meetingUrl || '' : '',
+    slots: poll.slots.map((s, i) => ({ ...s, totals: Object.fromEntries(choices.map(v => [v, responses.filter(r => r.votes[i] === v).length])) })), selectedSlotId: poll.selectedSlotId || null, rescheduledAt: poll.rescheduledAt || null, meetingUrl: poll.status === 'finalized' ? poll.meetingUrl || '' : '',
     myResponse: own ? { name: own.name, votes: own.votes } : null,
     ...((organizer || !poll.anonymous) ? { responses: responses.map(r => ({ name: r.name, votes: r.votes, updatedAt: r.updatedAt })), ...(organizer ? { ...(poll.status === 'draft' ? { draftInput: poll.draftInput } : {}), createdAt: poll.createdAt, updatedAt: poll.updatedAt } : {}) } : {}) };
 }
