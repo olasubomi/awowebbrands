@@ -158,7 +158,19 @@
   async function list(after) {
     const d = await request('/api/workspace/scheduling' + (after ? '?after=' + encodeURIComponent(after) : ''));
     if (!after) $('poll-list').replaceChildren(); if (!d.polls.length && !after) node('p', 'Your first meeting poll starts here.', $('poll-list'));
-    d.polls.forEach(p => { const card = node('article', undefined, $('poll-list')); node('h3', p.title, card); node('p', p.status, card); const a = node('a', 'Manage poll', card); a.href = '/workspace/scheduling/' + p.id; });
+    const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: deviceZone });
+    d.polls.forEach(p => {
+      const card = node('article', undefined, $('poll-list'));
+      node('h3', p.title, card);
+      node('p', p.status, card);
+      const created = p.createdAt ? new Date(p.createdAt) : null;
+      if (created && Number.isFinite(created.getTime())) {
+        const date = node('p', 'Created: ', card);
+        node('time', dateFormat.format(created), date).dateTime = created.toISOString();
+      }
+      const a = node('a', 'Manage poll', card);
+      a.href = '/workspace/scheduling/' + p.id;
+    });
     next = d.next; $('more-polls').hidden = !next;
   }
   $('new-poll').addEventListener('click', () => openEditor(null));
