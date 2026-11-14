@@ -4,6 +4,7 @@
   const id = location.pathname.match(/\/(?:schedule|scheduling)\/([A-Za-z0-9_-]{43})$/)?.[1];
   const deviceZone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
   let editing = null, entryZone = deviceZone;
+  let listQuery = new URLSearchParams();
   let poll, next, privacyAdmin = false, slotNumber = 0, toastTimer;
   function node(tag, text, parent) { const n = document.createElement(tag); if (text !== undefined) n.textContent = text; parent?.append(n); return n; }
   function notify(text) { $('poll-message').textContent = text; $('poll-toast').textContent = text; $('poll-toast').hidden = false; clearTimeout(toastTimer); toastTimer = setTimeout(() => { $('poll-toast').hidden = true; }, 12000); }
@@ -155,9 +156,16 @@
     $('poll-notice').textContent = poll.status === 'draft' ? 'This draft is not published. Save it privately or publish it when complete.' : poll.status === 'cancelled' ? 'This poll is cancelled.' : poll.status === 'finalized' ? 'This meeting time is confirmed. Responses are closed; check this link for changes or cancellation.' : !poll.acceptingResponses && poll.status === 'open' ? 'Voting has closed. Return to this link for the final decision.' : manage ? 'To submit your own availability, open the participant link.' : 'Keep this link to see the final time. You can change your response in this browser while voting is open.';
   }
   async function load(keepDraft = false) { render(await request((manage ? '/api/workspace/scheduling/' : '/api/scheduling/polls/') + id), keepDraft); }
-  async function list(after) {
-    const d = await request('/api/workspace/scheduling' + (after ? '?after=' + encodeURIComponent(after) : ''));
-    if (!after) $('poll-list').replaceChildren(); if (!d.polls.length && !after) node('p', 'Your first meeting poll starts here.', $('poll-list'));
+  async function list(after, filters = listQuery) {
+    const query = new URLSearchParams(filters);
+    if (after) query.set('after', after);
+    const d = await request('/api/workspace/scheduling?' + query);
+    listQuery = filters;
+    if (!after) $('poll-list').replaceChildren();
+    const filtered = filters.has('q') || (filters.has('status') && filters.get('status') !== 'all');
+    $('poll-list-status').textContent = !$('poll-list').childElementCount && !d.polls.length
+      ? (filtered ? 'No polls match. Try a different title or status.' : 'Your first meeting poll starts here.')
+      : `${$('poll-list').childElementCount + d.polls.length} polls shown.`;
     const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: deviceZone });
     d.polls.forEach(p => {
       const card = node('article', undefined, $('poll-list'));
@@ -239,6 +247,13 @@
   }, 'decision'); });
   $('cancel-poll').addEventListener('click', () => action(async () => { if (!window.confirm('Cancel this poll and close responses?')) return; render(await request('/api/workspace/scheduling/' + id + '/decision', 'POST', { action: 'cancel', version: poll.version })); notify('Poll cancelled.'); }));
   $('save-privacy').addEventListener('click', () => action(async () => { if (!$('anonymous').checked && !window.confirm('Make names and individual availability visible to everyone with the link?')) return; render(await request('/api/workspace/scheduling/' + id + '/privacy', 'PATCH', { anonymous: $('anonymous').checked, version: poll.version })); notify('Privacy setting saved.'); }));
+  $('poll-filters').addEventListener('submit', e => {
+    e.preventDefault();
+    const filters = new URLSearchParams({ status: $('poll-filter-status').value, order: $('poll-order').value });
+    const title = $('poll-search').value.trim();
+    if (title) filters.set('q', title);
+    action(() => list(undefined, filters));
+  });
   $('more-polls').addEventListener('click', () => action(() => list(next)));
   action(async () => {
     if (manage) { $('new-poll').hidden = !!id; const me = await request('/api/workspace/me'); privacyAdmin = me.permissions.includes('scheduling:privacy'); }

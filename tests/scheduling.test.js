@@ -117,6 +117,43 @@ test('deadline, response cap, disabled flag, and unknown poll references are enf
   assert.equal((await f.request('/api/scheduling/polls/' + token())).status, 404);
   const disabled = await fixture(t, false); assert.equal((await disabled.request('/schedule/' + token())).status, 503);
 });
+test('poll list applies title and status before pagination, with a stable chronological cursor', async () => {
+  const createdAt = new Date('2026-11-10T12:00:00Z'), ids = Array.from({ length: 21 }, () => token());
+  let query, sort, limit, anchorFilter;
+  const cursor = {
+    project() { return this; }, sort(value) { sort = value; return this; },
+    limit(value) { limit = value; return this; },
+    async toArray() { return ids.map(_id => ({ _id, title: 'Team (weekly)', createdAt })); }
+  };
+  const store = createSchedulingStore(async () => ({
+    createIndex: async () => {},
+    findOne: async filter => { anchorFilter = filter; return filter.ownerId === 'owner' ? { createdAt } : null; },
+    find: filter => { query = filter; return cursor; }
+  }));
+  const first = await store.list('owner', { search: 'team (weekly)', status: 'awaiting' });
+  assert.equal(first.polls.length, 20); assert.equal(first.next, ids[19]);
+  assert.equal(query.ownerId, 'owner'); assert.equal(query.status, 'open');
+  assert.ok(query.deadline.$lte instanceof Date);
+  const regex = new RegExp(query.title.$regex, query.title.$options);
+  assert.ok(regex.test('Team (weekly)')); assert.ok(!regex.test('Team weekly'));
+  assert.deepEqual(sort, { createdAt: -1, _id: -1 }); assert.equal(limit, 21);
+  await store.list('owner', { after: first.next, status: 'past', order: 'oldest' });
+  assert.deepEqual(anchorFilter, { _id: first.next, ownerId: 'owner' });
+  assert.deepEqual(query.$or, [{ createdAt: { $gt: createdAt } }, { createdAt, _id: { $gt: first.next } }]);
+  assert.equal(query.status, 'finalized'); assert.ok(query.$expr.$anyElementTrue);
+  assert.deepEqual(sort, { createdAt: 1, _id: 1 });
+  assert.equal(await store.list('other', { after: first.next }), null);
+});
+test('poll list rejects malformed filters and passes validated options within organizer scope', async t => {
+  const f = await fixture(t), alice = await f.login('alice@example.com');
+  const path = '/api/workspace/scheduling';
+  for (const query of ['status=unknown', 'order=unknown', 'q=one&q=two', 'after=wrong']) assert.equal((await f.request(path + '?' + query, alice)).status, 400);
+  let options;
+  f.scheduling.list = async (owner, filters) => { assert.ok(owner); options = filters; return { polls: [], next: null }; };
+  assert.equal((await f.request(path + '?q=%20Team%20&status=confirmed&order=oldest', alice)).status, 200);
+  assert.deepEqual(options, { after: undefined, search: 'Team', status: 'confirmed', order: 'oldest' });
+});
+
 test('Mongo store enforces revision and open deadline in the atomic write; data stays in separate bounded documents', async () => {
   let query, update, options;
   const collection = { createIndex: async () => {}, findOneAndUpdate: async (q, u, o) => { query = q; update = u; options = o; return null; } };
