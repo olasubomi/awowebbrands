@@ -2,6 +2,7 @@
 const express = require('express');
 const { tokenPattern, token, digest, owns, canCreate, checkPoll, checkDraft, sameSlots, checkBallot, pollView, calendar } = require('./model');
 const { schedulingPage } = require('./pages');
+const { listStatuses } = require('./store');
 function registerScheduling(app, { env, store, origin, sameOrigin, privateHeaders, navigation }) {
   const enabled = env.SWS_SCHEDULING_ENABLED === 'true' && env.SWS_STAFF_ENABLED === 'true' && !!origin;
   const available = (req, res, next) => enabled ? next() : res.status(503).json({ message: 'Scheduling polls are not enabled yet.' });
@@ -15,8 +16,15 @@ function registerScheduling(app, { env, store, origin, sameOrigin, privateHeader
   app.get(['/schedule/:id', '/workspace/scheduling', '/workspace/scheduling/:id'], (req, res) => res.send(schedulingPage(req.path.startsWith('/workspace'), req.staff, navigation)));
   app.use('/api/workspace/scheduling', manage);
   app.get('/api/workspace/scheduling', limited('list', 60), safe(async (req, res) => {
-    if (Object.keys(req.query).some(k => k !== 'after') || (req.query.after !== undefined && (typeof req.query.after !== 'string' || !tokenPattern.test(req.query.after)))) return res.status(400).json({ message: 'Invalid poll page.' });
-    res.json(await data.list(req.staff.permissions.includes('scheduling:manage:any') ? null : req.admin.id, req.query.after));
+    const { after, q = '', status = 'all', order = 'newest' } = req.query;
+    if (Object.keys(req.query).some(k => !['after', 'q', 'status', 'order'].includes(k)) ||
+        (after !== undefined && (typeof after !== 'string' || !tokenPattern.test(after))) ||
+        typeof q !== 'string' || q.length > 120 || !listStatuses.has(status) || !['newest', 'oldest'].includes(order)) {
+      return res.status(400).json({ message: 'Check the poll search, filter or page and try again.' });
+    }
+    const result = await data.list(req.staff.permissions.includes('scheduling:manage:any') ? null : req.admin.id, { after, search: q.trim(), status, order });
+    if (!result) return res.status(400).json({ message: 'This poll page has expired. Run the search again.' });
+    res.json(result);
   }));
   app.post('/api/workspace/scheduling', sameOrigin, parse, limited('create', 10), safe(async (req, res) => {
     const checked = checkPoll(req.body); if (checked.errors) return res.status(400).json({ message: 'Check the highlighted poll fields.', errors: checked.errors });
