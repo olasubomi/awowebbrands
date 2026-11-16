@@ -76,6 +76,16 @@ function registerScheduling(app, { env, store, origin, sameOrigin, privateHeader
     if (!saved) return conflict(res);
     res.json({ poll: pollView(saved, null, true), shareUrl: origin + '/schedule/' + p._id });
   }));
+  app.patch('/api/workspace/scheduling/:id/archive', sameOrigin, parse, limited('archive', 20), safe(async (req, res) => {
+    const p = await load(req, res, true); if (!p) return;
+    const b = req.body;
+    if (!b || Object.keys(b).some(k => !['archived', 'version'].includes(k)) || typeof b.archived !== 'boolean' || !Number.isSafeInteger(b.version) || b.version < 0) return res.status(400).json({ message: 'Choose archive or restore using the current poll revision.' });
+    if (b.version !== p.version) return conflict(res);
+    if (!!p.archived === b.archived) return res.json({ poll: pollView(p, null, true) });
+    const saved = await data.change(p._id, b.version, { archived: b.archived }, b.archived ? 'archived' : 'restored', req.admin.id);
+    if (!saved) return conflict(res);
+    res.json({ poll: pollView(saved, null, true) });
+  }));
   app.patch('/api/workspace/scheduling/:id/privacy', sameOrigin, parse, limited('privacy', 20), safe(async (req, res) => {
     if (!req.staff.permissions.includes('scheduling:privacy')) return res.status(403).json({ message: 'Only an administrator can change poll anonymity.' });
     const p = await load(req, res, true); if (!p) return;

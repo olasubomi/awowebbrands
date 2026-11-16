@@ -1,8 +1,9 @@
 'use strict';
 const { token } = require('./model');
-const listStatuses = new Set(['all', 'draft', 'open', 'awaiting', 'confirmed', 'past', 'cancelled']);
+const listStatuses = new Set(['all', 'draft', 'open', 'awaiting', 'confirmed', 'past', 'cancelled', 'archived']);
 function listFilter(ownerId, search, status, now) {
   const query = ownerId ? { ownerId } : {};
+  query.archived = status === 'archived' ? true : { $ne: true };
   if (search) query.title = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
   if (status === 'draft' || status === 'cancelled') query.status = status;
   if (status === 'open' || status === 'awaiting') {

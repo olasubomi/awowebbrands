@@ -142,6 +142,8 @@
     });
     $('withdraw').hidden = !poll.myResponse; $('organizer-panel').hidden = !manage;
     if (manage) {
+      $('archive-poll').textContent = poll.archived ? 'Restore to poll list' : 'Archive poll';
+      $('archive-help').textContent = poll.archived ? 'This poll is archived. Restore it to show it in the main list again.' : 'Archiving hides this poll from the main list. Its status and shared link stay the same.';
       const now = Date.now(), changing = poll.status === 'finalized';
       const future = poll.slots.filter(s => +new Date(s.startsAt) > now);
       const canChange = changing && future.some(s => s.id === poll.selectedSlotId) && future.some(s => s.id !== poll.selectedSlotId);
@@ -164,7 +166,7 @@
     if (!after) $('poll-list').replaceChildren();
     const filtered = filters.has('q') || (filters.has('status') && filters.get('status') !== 'all');
     $('poll-list-status').textContent = !$('poll-list').childElementCount && !d.polls.length
-      ? (filtered ? 'No polls match. Try a different title or status.' : 'Your first meeting poll starts here.')
+      ? (filtered ? 'No polls match. Try a different title or status.' : 'No polls in the main list. Check Archived for hidden polls or create a new poll.')
       : `${$('poll-list').childElementCount + d.polls.length} polls shown.`;
     const dateFormat = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeZone: deviceZone });
     d.polls.forEach(p => {
@@ -245,6 +247,14 @@
     render(await request('/api/workspace/scheduling/' + id + '/decision', 'POST', { action: changing ? 'reschedule' : 'finalize', slotId: $('final-slot').value, meetingUrl: $('final-link').value, version: poll.version }));
     notify(changing ? 'Confirmed time changed. The same link shows the new time.' : 'Meeting time confirmed. The shared link now shows your decision.');
   }, 'decision'); });
+  $('archive-poll').addEventListener('click', () => action(async () => {
+    const archived = !poll.archived;
+    const result = await request('/api/workspace/scheduling/' + id + '/archive', 'PATCH', { archived, version: poll.version });
+    poll = result.poll;
+    $('archive-poll').textContent = archived ? 'Restore to poll list' : 'Archive poll';
+    $('archive-help').textContent = archived ? 'This poll is archived. Restore it to show it in the main list again.' : 'Archiving hides this poll from the main list. Its status and shared link stay the same.';
+    notify(archived ? 'Poll archived. Find it with the Archived filter.' : 'Poll restored to the main list.');
+  }));
   $('cancel-poll').addEventListener('click', () => action(async () => { if (!window.confirm('Cancel this poll and close responses?')) return; render(await request('/api/workspace/scheduling/' + id + '/decision', 'POST', { action: 'cancel', version: poll.version })); notify('Poll cancelled.'); }));
   $('save-privacy').addEventListener('click', () => action(async () => { if (!$('anonymous').checked && !window.confirm('Make names and individual availability visible to everyone with the link?')) return; render(await request('/api/workspace/scheduling/' + id + '/privacy', 'PATCH', { anonymous: $('anonymous').checked, version: poll.version })); notify('Privacy setting saved.'); }));
   $('poll-filters').addEventListener('submit', e => {

@@ -66,7 +66,7 @@ Collection: `sws_scheduling_preview_polls` or `sws_scheduling_prod_polls`. Each 
 | `version` | Integer incremented by every vote, decision and privacy change |
 | `createdAt`, `updatedAt`, `history[]` | Timestamps and at most 50 management/response action records; no raw guest capabilities |
 
-The organizer list supports case-insensitive title search and status filters. Confirmed meetings move to Past meetings at the selected time’s end; open polls with an elapsed deadline appear under Awaiting decision. The list defaults to newest-created first and supports oldest first. Indexes on `{ownerId:1, createdAt:-1, _id:-1}` and `{createdAt:-1, _id:-1}` support chronological cursor pagination with 20 results per page. Optimistic compare-and-swap on the entire poll prevents concurrent votes, decisions and privacy edits from overwriting each other. Voting additionally checks open status and the current deadline inside the atomic write. A conflict returns 409; Refresh results preserves unsaved inputs and lets the user retry.
+The organizer list supports case-insensitive title search and status filters. Archiving hides a poll from the main list; the Archived filter includes it until its owner or an administrator restores it. Archiving does not cancel the poll, close voting, or change its shared link. Confirmed meetings move to Past meetings at the selected time’s end; open polls with an elapsed deadline appear under Awaiting decision. The list defaults to newest-created first and supports oldest first. Indexes on `{ownerId:1, createdAt:-1, _id:-1}` and `{createdAt:-1, _id:-1}` support chronological cursor pagination with 20 results per page. Optimistic compare-and-swap on the entire poll prevents concurrent votes, decisions and privacy edits from overwriting each other. Voting additionally checks open status and the current deadline inside the atomic write. A conflict returns 409; Refresh results preserves unsaved inputs and lets the user retry.
 
 The 100-response/20-option limits intentionally bound document size and request cost. At larger scale, extract ballots to a separate collection with a transaction or other explicit decision/vote consistency model. Do not silently drop the concurrency condition during extraction.
 
@@ -76,6 +76,7 @@ The 100-response/20-option limits intentionally bound document size and request 
 | --- | --- | --- |
 | GET | `/api/workspace/scheduling?q={title}&status={status}&order={order}&after={id}` | Session; own polls, admins all |
 | POST | `/api/workspace/scheduling/drafts` | Session; `{draftInput}`; incomplete fields allowed within bounded types/lengths, private until publication |
+| PATCH | `/api/workspace/scheduling/:id/archive` | Owner/admin; `{archived,version}` hides or restores a poll in the organizer list |
 | PATCH | `/api/workspace/scheduling/:id` | Owner/admin; drafts `{version,draftInput}`; published `{version,title,description,timezone,deadline,slots,resetResponses?:boolean}` |
 | POST | `/api/workspace/scheduling/:id/publish` | Owner/admin; draft only, complete canonical poll fields plus current `version` |
 | POST | `/api/workspace/scheduling` | Session; `{title,description,timezone,deadline,slots:[{startsAt,endsAt}]}` |

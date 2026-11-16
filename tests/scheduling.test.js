@@ -13,7 +13,7 @@ function memoryScheduling() {
   return { polls,
     async create(data, ownerId, status = 'open') { const now = new Date(), p = { _id: token(), ownerId, ...data, anonymous: false, responses: [], status, version: 0, createdAt: now, updatedAt: now }; polls.set(p._id, structuredClone(p)); return p; },
     async get(id) { return structuredClone(polls.get(id)); },
-    async list(ownerId) { return { polls: [...polls.values()].filter(p => !ownerId || p.ownerId === ownerId).map(p => ({ id: p._id, title: p.title, status: p.status })), next: null }; },
+    async list(ownerId, { status } = {}) { return { polls: [...polls.values()].filter(p => (!ownerId || p.ownerId === ownerId) && !!p.archived === (status === 'archived')).map(p => ({ id: p._id, title: p.title, status: p.status })), next: null }; },
     async change(id, version, fields, action, actor, voting) { const p = polls.get(id); if (!p || p.version !== version || (voting && (p.status !== 'open' || +p.deadline <= Date.now()))) return null; Object.assign(p, structuredClone(fields), { version: p.version + 1, updatedAt: new Date() }); return structuredClone(p); }
   };
 }
@@ -133,6 +133,7 @@ test('poll list applies title and status before pagination, with a stable chrono
   const first = await store.list('owner', { search: 'team (weekly)', status: 'awaiting' });
   assert.equal(first.polls.length, 20); assert.equal(first.next, ids[19]);
   assert.equal(query.ownerId, 'owner'); assert.equal(query.status, 'open');
+  assert.deepEqual(query.archived, { $ne: true });
   assert.ok(query.deadline.$lte instanceof Date);
   const regex = new RegExp(query.title.$regex, query.title.$options);
   assert.ok(regex.test('Team (weekly)')); assert.ok(!regex.test('Team weekly'));
@@ -143,6 +144,22 @@ test('poll list applies title and status before pagination, with a stable chrono
   assert.equal(query.status, 'finalized'); assert.ok(query.$expr.$anyElementTrue);
   assert.deepEqual(sort, { createdAt: 1, _id: 1 });
   assert.equal(await store.list('other', { after: first.next }), null);
+});
+test('owners can archive and restore polls without changing guest access or accepting stale edits', async t => {
+  const f = await fixture(t), alice = await f.login('alice@example.com'), bob = await f.login('bob@example.com');
+  const poll = await created(f, alice), list = '/api/workspace/scheduling', path = list + '/' + poll.id + '/archive';
+  const guestPath = '/api/scheduling/polls/' + poll.id;
+  assert.equal((await f.request(path, bob, 'PATCH', { archived: true, version: 0 })).status, 404);
+  const archived = await f.request(path, alice, 'PATCH', { archived: true, version: 0 });
+  assert.equal(archived.status, 200);
+  assert.equal((await archived.json()).poll.archived, true);
+  assert.equal((await (await f.request(list, alice)).json()).polls.length, 0);
+  assert.equal((await (await f.request(list + '?status=archived', alice)).json()).polls[0].id, poll.id);
+  const guest = (await (await f.request(guestPath)).json()).poll;
+  assert.equal(guest.status, 'open'); assert.equal(guest.acceptingResponses, true); assert.equal(guest.archived, undefined);
+  assert.equal((await f.request(path, alice, 'PATCH', { archived: false, version: 0 })).status, 409);
+  assert.equal((await f.request(path, alice, 'PATCH', { archived: false, version: 1 })).status, 200);
+  assert.equal((await (await f.request(list, alice)).json()).polls[0].id, poll.id);
 });
 test('poll list rejects malformed filters and passes validated options within organizer scope', async t => {
   const f = await fixture(t), alice = await f.login('alice@example.com');
